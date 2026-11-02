@@ -1,0 +1,10 @@
+[gd_scene format=3 uid="uid://dcyv5h1xt717s"]
+
+[node name="Node3D" type="Node3D" unique_id=1580728519]
+
+[node name="FlecsManager3D" type="FlecsManager3D" parent="." unique_id=1308431825]
+
+[node name="Camera3D" type="Camera3D" parent="." unique_id=2081705782]
+transform = Transform3D(1, 0, 0, 0, 0.87529874, 0.4835826, 0, -0.4835826, 0.87529874, 0, 7.5132885, 11.252924)
+
+[node name="DirectionalLight3D" type="DirectionalLight3D" parent="." unique_id=1047746278]
