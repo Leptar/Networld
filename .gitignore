@@ -1,0 +1,16 @@
+﻿# Moteur Godot
+demo/.godot/
+*.pck
+
+# Fichiers de compilation C++ / SCons / MSVC
+*.obj
+*.dll
+*.exp
+*.lib
+*.exe
+*.pdb
+.sconsign.dblite
+compile_commands.json
+
+# Environnement de développement (IDE)
+.idea/
