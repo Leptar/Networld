@@ -4,20 +4,14 @@ import sys
 
 env = SConscript("godot-cpp/SConstruct")
 
-# For reference:
-# - CCFLAGS are compilation flags shared between C and C++
-# - CFLAGS are for C-specific compilation flags
-# - CXXFLAGS are for C++-specific compilation flags
-# - CPPFLAGS are for pre-processor flags
-# - CPPDEFINES are for pre-processor defines
-# - LINKFLAGS are for linking flags
+VariantDir("build/src", "src", duplicate=0)
+VariantDir("build/thirdparty", "thirdparty", duplicate=0)
 
-# tweak this if you want to use different folders, or more folders, to store your source code in.
 env.Append(CPPPATH=["src/"])
-sources = Glob("src/*.cpp")
+sources = Glob("build/src/*.cpp")
 
 env.Append(CPPPATH=["thirdparty/flecs"])
-sources.append("thirdparty/flecs/flecs.c")
+sources.append("build/thirdparty/flecs/flecs.c")
 
 if env["platform"] == "macos":
     library = env.SharedLibrary(
@@ -45,4 +39,5 @@ else:
 
 if env["platform"] == "windows":
     env.Append(LIBS=["ws2_32"])
+
 Default(library)
