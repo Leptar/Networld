@@ -4,6 +4,7 @@
 
 #ifndef NETWORLD_INETTRANSPORT_H
 #define NETWORLD_INETTRANSPORT_H
+
 #pragma once
 #include <cstdint>
 #include <vector>
@@ -29,7 +30,10 @@ public:
     virtual void close() = 0;
 
     virtual void poll() = 0;
-    virtual bool send(uint32_t target_peer_id, NetChannel channel, std::span<const uint8_t> data) = 0;
+
+    // Remplace std::span par un pointeur brut + taille
+    virtual bool send(uint32_t target_peer_id, NetChannel channel, const uint8_t* data, size_t size) = 0;
     virtual bool recv(NetPacket& out_packet) = 0;
 };
+
 #endif //NETWORLD_INETTRANSPORT_H
