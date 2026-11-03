@@ -1,29 +1,51 @@
 extends Node
 
-var host_world: NetWorld
-var client_world: NetWorld
+var net_world: NetWorld
+var mesh_instance: MeshInstance3D
+var vbox: VBoxContainer # On stocke la référence directe ici
 
 func _ready() -> void:
+	# 1. Création d'une représentation visuelle (un cube)
+	mesh_instance = MeshInstance3D.new()
+	mesh_instance.mesh = BoxMesh.new()
+	add_child(mesh_instance)
 	
+	# 2. Ajout de la caméra avec rotation statique
+	var camera = Camera3D.new()
+	camera.position = Vector3(0, 7, 10)
+	camera.rotation_degrees = Vector3(-35, 0, 0) # Remplace le look_at()
+	add_child(camera)
 	
-	if OS.has_feature("server"):
-		host_world = NetWorld.new()
-		host_world.name = "HostWorld"
-		add_child(host_world)
-		host_world.host(7070)
-		print("[GDScript] Serveur démarré sur le port 7070.")
-	else :
-		client_world = NetWorld.new()
-		client_world.name = "ClientWorld"
-		add_child(client_world)
-		client_world.join("127.0.0.1", 7070)
-		print("[GDScript] Client connecté à 127.0.0.1:7070.")
-		# 2. On attache ce cube à l'entité du monde client
-		# 1. Création d'une représentation visuelle (un cube)
-		var mesh_instance = MeshInstance3D.new()
-		mesh_instance.mesh = BoxMesh.new()
-		add_child(mesh_instance)
-		client_world.bind_view_to_server_player(mesh_instance)
+	# 3. Interface Utilisateur de test
+	vbox = VBoxContainer.new()
+	add_child(vbox)
 	
+	var btn_host = Button.new()
+	btn_host.text = "Démarrer en tant que HOST"
+	btn_host.pressed.connect(_on_host_pressed)
+	vbox.add_child(btn_host)
 	
+	var btn_client = Button.new()
+	btn_client.text = "Démarrer en tant que CLIENT"
+	btn_client.pressed.connect(_on_client_pressed)
+	vbox.add_child(btn_client)
+
+func _on_host_pressed() -> void:
+	net_world = NetWorld.new()
+	net_world.name = "HostWorld"
+	add_child(net_world)
+	net_world.host(7070)
 	
+	net_world.bind_view_to_server_player(mesh_instance)
+	print("[HOST] Démarré ! Le cube avance sur l'axe X grâce à Flecs (Velocity).")
+	vbox.hide() # Utilisation de la référence sécurisée
+
+func _on_client_pressed() -> void:
+	net_world = NetWorld.new()
+	net_world.name = "ClientWorld"
+	add_child(net_world)
+	net_world.join("127.0.0.1", 7070)
+	
+	net_world.bind_view_to_server_player(mesh_instance)
+	print("[CLIENT] Connecté ! Le cube devrait suivre les paquets UDP du Host.")
+	vbox.hide() # Utilisation de la référence sécurisée

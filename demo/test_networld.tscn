@@ -2,5 +2,12 @@
 
 [ext_resource type="Script" uid="uid://bfdfs6lqiq3mm" path="res://test_networld.gd" id="1_dxygs"]
 
-[node name="Node2D" type="Node2D" unique_id=61635709]
+[sub_resource type="BoxMesh" id="BoxMesh_7se6e"]
+size = Vector3(5.4821777, 1, 5.010742)
+
+[node name="Node3D" type="Node3D" unique_id=648332610]
 script = ExtResource("1_dxygs")
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="." unique_id=893901348]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.7375102, -0.006978512, 4.7013845)
+mesh = SubResource("BoxMesh_7se6e")

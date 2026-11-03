@@ -5,6 +5,7 @@
 #include <godot_cpp/godot.hpp>
 
 #include "flecs_test.h"
+#include "NetEntity.h"
 #include "NetWorld.h"
 
 using namespace godot;
@@ -16,6 +17,7 @@ void initialize_networld_module(ModuleInitializationLevel p_level) {
 
     GDREGISTER_RUNTIME_CLASS(FlecsManager3D)
     ClassDB::register_class<NetWorld>();
+    ClassDB::register_class<NetEntity>();
 }
 
 void uninitialize_networld_module(ModuleInitializationLevel p_level) {
