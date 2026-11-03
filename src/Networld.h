@@ -13,6 +13,7 @@
 #include "INetTransport.h"
 
 namespace godot {
+    class Node3D;
 
     class NetWorld : public Node {
         GDCLASS(NetWorld, Node);
@@ -32,6 +33,8 @@ namespace godot {
 
         void host(int port);
         void join(String ip, int port);
+
+        void bind_view_to_server_player(Node3D* visual_node);
 
         void _process(double delta) override;
     };
