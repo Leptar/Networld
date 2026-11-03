@@ -36,11 +36,11 @@ std::vector<uint8_t> serialize_query(flecs::iter& it, const NetRegistry& registr
         const char* comp_name = field_id.str();
         if (!comp_name) comp_name = "Inconnu";
 
-        godot::UtilityFunctions::print("[NetWorld Extract] Champ ", i,
+        /*godot::UtilityFunctions::print("[NetWorld Extract] Champ ", i,
             " | Nom: ", comp_name,
             " | ID_Flecs: ", (int64_t)comp_id,
             " | NetID: ", net_id,
-            " | Size: ", (int64_t)comp_size);
+            " | Size: ", (int64_t)comp_size);*/
 
         if (net_id == 0 || comp_size == 0) continue;
 
