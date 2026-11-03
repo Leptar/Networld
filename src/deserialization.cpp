@@ -2,43 +2,52 @@
 // Created by leoul on 2026-11-02.
 //
 #include "deserialization.h"
-#include "flecs.h"
-#include "NetRegistry.h"
+#include <cstring>
 
-void deserialize_buffer(flecs::world& ecs, const uint8_t* data, size_t size, const NetRegistry& registry) {
-    if (size < 3) return;
+std::vector<NetBatch> deserialize_buffer(const uint8_t* data, size_t size) {
+    std::vector<NetBatch> batches;
+    if (!data || size < 3) return batches;
+
     size_t offset = 0;
 
-    uint16_t entity_count = (data[offset] << 8) | data[offset+1];
-    offset += 2;
+    // Boucle pour décoder tous les blocs d'archétypes présents dans le paquet
+    while (offset + 3 <= size) {
+        NetBatch batch;
 
-    std::vector<flecs::entity_t> entities(entity_count);
-    std::memcpy(entities.data(), data + offset, entity_count * sizeof(flecs::entity_t));
-    offset += entity_count * sizeof(flecs::entity_t);
-
-    uint8_t column_count = data[offset++];
-
-    for (uint8_t c = 0; c < column_count; ++c) {
-        uint16_t net_id = (data[offset] << 8) | data[offset+1];
+        uint16_t entity_count = (static_cast<uint16_t>(data[offset]) << 8) | data[offset + 1];
         offset += 2;
 
-        uint16_t comp_size = (data[offset] << 8) | data[offset+1];
-        offset += 2;
+        size_t entities_bytes = entity_count * sizeof(uint64_t);
+        if (offset + entities_bytes + 1 > size) break; // Protection contre paquet tronqué
 
-        flecs::id_t local_id = registry.get_local_id(net_id);
-        const uint8_t* column_payload = data + offset;
+        batch.entities.resize(entity_count);
+        std::memcpy(batch.entities.data(), data + offset, entities_bytes);
+        offset += entities_bytes;
 
-        if (local_id != 0 && comp_size > 0) {
-            std::vector<uint8_t> aligned_comp(comp_size);
+        uint8_t column_count = data[offset++];
 
-            for (uint16_t i = 0; i < entity_count; ++i) {
-                if (!ecs.is_alive(entities[i])) {
-                    continue;
-                }
-                std::memcpy(aligned_comp.data(), column_payload + (i * comp_size), comp_size);
-                ecs_set_id(ecs.c_ptr(), entities[i], local_id, comp_size, aligned_comp.data());
-            }
+        for (uint8_t c = 0; c < column_count; ++c) {
+            if (offset + 4 > size) break;
+
+            NetColumn col;
+            col.net_id = (static_cast<uint16_t>(data[offset]) << 8) | data[offset + 1];
+            offset += 2;
+
+            col.element_size = (static_cast<uint16_t>(data[offset]) << 8) | data[offset + 1];
+            offset += 2;
+
+            size_t payload_bytes = static_cast<size_t>(entity_count) * col.element_size;
+            if (offset + payload_bytes > size) break;
+
+            col.payload.resize(payload_bytes);
+            std::memcpy(col.payload.data(), data + offset, payload_bytes);
+            offset += payload_bytes;
+
+            batch.columns.push_back(std::move(col));
         }
-        offset += entity_count * comp_size;
+
+        batches.push_back(std::move(batch));
     }
+
+    return batches;
 }

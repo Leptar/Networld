@@ -7,9 +7,8 @@
 #pragma once
 #include <vector>
 #include <cstdint>
-#include "flecs.h"
-#include "NetRegistry.h"
+#include "NetBatch.h"
 
-std::vector<uint8_t> serialize_query(flecs::iter& it, const NetRegistry& registry);
+std::vector<uint8_t> serialize_batch(const NetBatch& batch);
 
 #endif //NETWORLD_SERIALIZATION_H

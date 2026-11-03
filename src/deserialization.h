@@ -5,9 +5,11 @@
 #ifndef NETWORLD_DESERIALIZATION_H
 #define NETWORLD_DESERIALIZATION_H
 #pragma once
+#include <cstddef>
 #include <cstdint>
-#include "flecs.h"
-#include "NetRegistry.h"
+#include <vector>
+#include "NetBatch.h"
 
-void deserialize_buffer(flecs::world& ecs, const uint8_t* data, size_t size, const NetRegistry& registry);
+std::vector<NetBatch> deserialize_buffer(const uint8_t* data, size_t size);
+
 #endif //NETWORLD_DESERIALIZATION_H
