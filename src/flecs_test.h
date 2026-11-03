@@ -1,10 +1,13 @@
-﻿#include <godot_cpp/classes/mesh_instance3d.hpp>
+﻿#pragma once
+
+#include <godot_cpp/classes/mesh_instance3d.hpp>
 #include <godot_cpp/classes/sphere_mesh.hpp>
 #include <godot_cpp/variant/utility_functions.hpp>
 
 #include "flecs.h"
-#include "components.cpp"
+#include "components.h"
 #include "godot_cpp/classes/engine.hpp"
+#include "test_roundtrip_serialize.h"
 
 namespace godot {
 
@@ -18,6 +21,7 @@ protected:
 
 public:
     FlecsManager3D() {
+
         ecs.component<Vector3>()
             .member<float>("x")
             .member<float>("y")
@@ -51,6 +55,9 @@ public:
 
     void _ready() override {
         if (Engine::get_singleton()->is_editor_hint()) return; // Ne pas exécuter dans l'éditeur
+
+        UtilityFunctions::print("[NetWorld] Lancement du test unitaire Roundtrip...");
+        test_generic_roundtrip(ecs);
 
         MeshInstance3D* ball_mesh = memnew(MeshInstance3D);
         Ref<SphereMesh> sphere;
