@@ -10,8 +10,8 @@
 #include <memory>
 #include "flecs.h"
 #include "NetRegistry.h"
-#include "INetTransport.h"
-#include "NetBatch.h"
+#include "../core/INetTransport.h"
+#include "../core/NetBatch.h"
 
 namespace godot {
     class Node3D;

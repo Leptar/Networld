@@ -7,7 +7,7 @@
 #pragma once
 #include <godot_cpp/classes/node.hpp>
 #include <godot_cpp/classes/node3d.hpp>
-#include "NetWorld.h"
+#include "../NetWorld.h"
 
 namespace godot {
 

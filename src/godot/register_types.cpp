@@ -1,10 +1,10 @@
-﻿#include "register_types.h"
+﻿#include "../register_types.h"
 
 #include <gdextension_interface.h>
 #include <godot_cpp/core/defs.hpp>
 #include <godot_cpp/godot.hpp>
 
-#include "flecs_test.h"
+#include "../flecs_test.h"
 #include "NetEntity.h"
 #include "NetWorld.h"
 

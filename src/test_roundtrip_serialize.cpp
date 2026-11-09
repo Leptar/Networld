@@ -4,11 +4,11 @@
 // test_roundtrip_serialize.cpp
 #include "test_roundtrip_serialize.h"
 #include "components.h"
-#include "serialization.h"
-#include "deserialization.h"
+#include "core/serialization.h"
+#include "core/deserialization.h"
 #include <godot_cpp/variant/utility_functions.hpp>
 #include "flecs.h"
-#include "NetRegistry.h"
+#include "core/NetRegistry.h"
 
 // On utilise le namespace pour simplifier
 using namespace godot;

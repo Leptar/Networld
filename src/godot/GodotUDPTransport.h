@@ -6,7 +6,7 @@
 #define NETWORLD_GODOTUDPTRANSPORT_H
 
 #pragma once
-#include "INetTransport.h"
+#include "../core/INetTransport.h"
 #include <godot_cpp/classes/packet_peer_udp.hpp>
 #include <queue>
 

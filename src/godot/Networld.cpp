@@ -2,12 +2,12 @@
 // Created by leoul on 2026-11-02.
 //
 
-#include "NetWorld.h"
+#include "../NetWorld.h"
 #include "flecs.h"
-#include "components.h"
+#include "../components.h"
 #include "serialization.h"
-#include "deserialization.h"
-#include "GodotUdpTransport.h"
+#include "../core/deserialization.h"
+#include "GodotUDPTransport.h"
 #include <godot_cpp/variant/utility_functions.hpp>
 
 using namespace godot;

@@ -2,11 +2,11 @@
 // Created by leoul on 2026-11-03.
 //
 
-#include "NetEntity.h"
+#include "../NetEntity.h"
 #include <godot_cpp/core/class_db.hpp>
 #include <godot_cpp/classes/engine.hpp>
 #include <godot_cpp/variant/utility_functions.hpp>
-#include "components.h"
+#include "../components.h"
 
 using namespace godot;
 
