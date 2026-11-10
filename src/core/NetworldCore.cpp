@@ -197,8 +197,8 @@ namespace networld {
 
     }
 
-    void NetWorldCore::bind_external_view(uint64_t entity_id, uint64_t host_handle) {
-        flecs::entity e = ecs_.entity(entity_id);
+    void NetWorldCore::bind_external_view(const char* name, uint64_t host_handle) {
+        flecs::entity e = ecs_.entity(name);
         if (e.is_alive()) {
             e.set<ExternalView>({host_handle});
         }

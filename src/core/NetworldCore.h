@@ -64,7 +64,7 @@ public:
     void destroy_entity(uint64_t entity_id);
     uint64_t find_entity(const char* name) const;
 
-    void bind_external_view(uint64_t entity_id, uint64_t host_handle);
+    void bind_external_view(const char* name, uint64_t host_handle);
     void set_entity_position(uint64_t entity_id, const Vec3& pos);
     void set_entity_velocity(uint64_t entity_id, const Vec3& vel);
 
