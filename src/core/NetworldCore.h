@@ -30,9 +30,9 @@ class NetWorldCore {
     // pre-Query pour l'Egress réseau
     flecs::query<Position3D, Velocity3D> net_query_;
 
-    // Méthodes internes de traduction Flecs <-> NetBatch
-    NetBatch extract_batch(flecs::iter& it) const;
-    void apply_batches(const std::vector<NetBatch>& batches);
+    // traduction Flecs <-> NetBatch
+    NetBatch extract_batch(const flecs::iter& it) const;
+    void apply_batches(const std::vector<NetBatch>& batches) const;
 
 public:
     NetWorldCore();
@@ -48,8 +48,7 @@ public:
     // Exécute : Ingress Réseau -> Systèmes Flecs -> Collecte des Vues -> Egress Réseau
     void step(float delta_time);
 
-    // je tente un truc avec les templates ?
-    // TODO : Est ce un bon choix ?
+    // je tente un truc avec les templates
     template <typename T>
     uint64_t register_component(uint16_t net_id = 0) {
         flecs::id_t comp_id = ecs_.component<T>().id();
@@ -69,7 +68,7 @@ public:
     void set_entity_velocity(uint64_t entity_id, const Vec3& vel);
 
     // lecture des états
-    const std::vector<ViewSyncEntry>& get_view_updates() const { return view_updates_; }
+    const std::vector<ViewSyncEntry>& get_view_updates() { return view_updates_; }
 
     // pour des tests ou  d'autre systèmes au cas ou
     flecs::world& get_ecs() { return ecs_; }

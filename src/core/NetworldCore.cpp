@@ -10,10 +10,10 @@
 
 namespace networld {
 
-    NetBatch NetWorldCore::extract_batch(flecs::iter &it) const {
+    NetBatch NetWorldCore::extract_batch(const flecs::iter &it) const {
         NetBatch batch;
         const flecs::iter_t* c_it = it.c_ptr();
-        uint16_t entity_count = static_cast<uint16_t>(c_it->count);
+        const auto entity_count = static_cast<uint16_t>(c_it->count);
 
         // Copie des IDs d'entités Flecs vers le vecteur uint64_t neutre
         batch.entities.resize(entity_count);
@@ -21,10 +21,10 @@ namespace networld {
 
         for (int i = 0; i < c_it->field_count; ++i) {
             flecs::id field_id = it.id(i);
-            flecs::id_t comp_id = field_id.raw_id();
+            const flecs::id_t comp_id = field_id.raw_id();
 
-            uint16_t net_id = registry_.get_net_id(comp_id);
-            size_t comp_size = ecs_field_size(c_it, i);
+            const uint16_t net_id = registry_.get_net_id(comp_id);
+            const size_t comp_size = ecs_field_size(c_it, i);
 
             if (net_id == 0 || comp_size == 0) continue;
 
@@ -44,7 +44,7 @@ namespace networld {
         return batch;
     }
 
-    void NetWorldCore::apply_batches(const std::vector<NetBatch> &batches) {
+    void NetWorldCore::apply_batches(const std::vector<NetBatch> &batches) const {
         for (const NetBatch& batch : batches) {
             size_t entity_count = batch.entities.size();
 
@@ -66,7 +66,7 @@ namespace networld {
     NetWorldCore::NetWorldCore() {
         registry_.register_component(ecs_.component<Position3D>().id(), 10);
         registry_.register_component(ecs_.component<Velocity3D>().id(), 11);
-        ecs_.component<Networked>();
+        registry_.register_component(ecs_.component<Networked>(), 12);
 
         ecs_.component<Vec3>()
                 .member<float>("x")
