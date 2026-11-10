@@ -7,8 +7,8 @@ env = SConscript("godot-cpp/SConstruct")
 VariantDir("build/src", "src", duplicate=0)
 VariantDir("build/thirdparty", "thirdparty", duplicate=0)
 
-env.Append(CPPPATH=["src/*"])
-sources = Glob("build/src/*.cpp")
+env.Append(CPPPATH=["src/", "src/core/", "src/godot/"])
+sources = Glob("build/src/*.cpp") + Glob("build/src/core/*.cpp") + Glob("build/src/godot/*.cpp")
 
 env.Append(CPPPATH=["thirdparty/flecs"])
 sources.append("build/thirdparty/flecs/flecs.c")

@@ -2,10 +2,12 @@
 // Created by leoul on 2026-11-03.
 //
 
-#include "../NetEntity.h"
+#include "NetEntity.h"
 #include <godot_cpp/core/class_db.hpp>
 #include <godot_cpp/classes/engine.hpp>
 #include <godot_cpp/variant/utility_functions.hpp>
+
+#include "Networld.h"
 #include "../components.h"
 
 using namespace godot;
@@ -47,7 +49,7 @@ void NetEntity::bake() {
     }
 
     Node* networld_node = get_node_or_null(networld_path);
-    NetWorld* net_world = Object::cast_to<NetWorld>(networld_node);
+    auto* net_world = cast_to<NetWorld>(networld_node);
 
     if (!net_world) {
         UtilityFunctions::printerr("[NetEntity] Erreur : NetWorld introuvable au chemin specifie : ", networld_path);
