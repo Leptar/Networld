@@ -8,6 +8,8 @@
 #include <godot_cpp/classes/node.hpp>
 #include <godot_cpp/classes/node3d.hpp>
 
+#include "Networld.h"
+
 namespace godot {
 
     class NetEntity : public Node {
@@ -20,20 +22,18 @@ namespace godot {
         uint64_t flecs_entity_id_ = 0;
 
         // Le chemin (NodePath) vers le singleton NetWorld dans l'arbre de scène Godot
-        NodePath networld_path;
+        NetWorld* networld;
 
     protected:
         static void _bind_methods();
+        void _notification(int p_what);
 
     public:
         NetEntity();
         ~NetEntity();
 
-        void set_networld_path(const NodePath& path);
-        NodePath get_networld_path() const;
+        NetWorld* get_networld() const;
 
-        void _ready() override;
-        void _notification(int p_what);
         void bake();
     };
 

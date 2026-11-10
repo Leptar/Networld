@@ -4,10 +4,10 @@
 
 #include "NetWorld.h"
 #include "flecs.h"
-#include "../components.h"
 #include "GodotUDPTransport.h"
 
 using namespace godot;
+NetWorld *NetWorld::networld_ = nullptr;
 
 void NetWorld::_bind_methods() {
     ClassDB::bind_method(D_METHOD("host", "port"), &NetWorld::host);
@@ -19,6 +19,10 @@ void NetWorld::_bind_methods() {
         &NetWorld::bind_view_to_server_player);
 }
 
+NetWorld* NetWorld::get_networld() {
+    return networld_;
+}
+
 void NetWorld::bind_view_to_server_player(Node3D* visual_node) {
     if (!visual_node) return;
     uint64_t handle = visual_node->get_instance_id();
@@ -26,9 +30,14 @@ void NetWorld::bind_view_to_server_player(Node3D* visual_node) {
 }
 
 NetWorld::NetWorld() {
+    ERR_FAIL_COND(networld_ != nullptr);
+    networld_ = this;
 }
 
 NetWorld::~NetWorld() {
+    if (networld_ == this) {
+        networld_ = nullptr;
+    }
 }
 
 void NetWorld::host(int port) {

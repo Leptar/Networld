@@ -4,19 +4,22 @@
 #include <godot_cpp/core/defs.hpp>
 #include <godot_cpp/godot.hpp>
 
-#include "../flecs_test.h"
 #include "NetEntity.h"
 #include "NetWorld.h"
+#include "godot_cpp/classes/engine.hpp"
 
 using namespace godot;
+
+static NetWorld* networld_instance = nullptr;
 
 void initialize_networld_module(ModuleInitializationLevel p_level) {
     if (p_level != MODULE_INITIALIZATION_LEVEL_SCENE) {
         return;
     }
 
-    GDREGISTER_RUNTIME_CLASS(FlecsManager3D)
     ClassDB::register_class<NetWorld>();
+    networld_instance = memnew(NetWorld);
+    Engine::get_singleton()->register_singleton("Networld",NetWorld::get_networld());
     ClassDB::register_class<NetEntity>();
 }
 
@@ -24,6 +27,9 @@ void uninitialize_networld_module(ModuleInitializationLevel p_level) {
     if (p_level != MODULE_INITIALIZATION_LEVEL_SCENE) {
         return;
     }
+    Engine::get_singleton()->unregister_singleton("Networld");
+    memdelete(networld_instance);
+    networld_instance = nullptr;
 }
 
 extern "C" {

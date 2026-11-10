@@ -20,13 +20,14 @@ namespace godot {
     class NetWorld : public Node {
         GDCLASS(NetWorld, Node);
 
-    private:
+        static NetWorld *networld_;
         networld::NetWorldCore core_;
 
     protected:
         static void _bind_methods();
 
     public:
+        static NetWorld *get_networld();
         NetWorld();
         ~NetWorld();
 

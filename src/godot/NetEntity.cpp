@@ -8,43 +8,36 @@
 #include <godot_cpp/variant/utility_functions.hpp>
 
 #include "Networld.h"
-#include "../components.h"
 #include "godot_cpp/classes/canvas_item.hpp"
 
 using namespace godot;
 
 void NetEntity::_bind_methods() {
-    ClassDB::bind_method(D_METHOD("set_networld_path", "path"), &NetEntity::set_networld_path);
-    ClassDB::bind_method(D_METHOD("get_networld_path"), &NetEntity::get_networld_path);
+    ClassDB::bind_method(D_METHOD("get_networld_path"), &NetEntity::get_networld);
     ClassDB::bind_method(D_METHOD("bake"), &NetEntity::bake);
     ADD_PROPERTY(PropertyInfo(Variant::NODE_PATH, "networld_path"), "set_networld_path", "get_networld_path");
 }
 
 NetEntity::NetEntity() {
-    networld_path = NodePath("/root/NetWorld"); // Chemin par défaut (Singleton)
-}
-
-NetEntity::~NetEntity() {}
-
-void NetEntity::set_networld_path(const NodePath& path) {
-    networld_path = path;
-}
-
-NodePath NetEntity::get_networld_path() const {
-    return networld_path;
-}
-
-void NetEntity::_ready() {
-    if (Engine::get_singleton()->is_editor_hint()) {
-        return;
+    if (NetWorld* net_world = NetWorld::get_networld()) {
+        networld = net_world;
     }
+}
 
-    call_deferred("bake");
+NetEntity::~NetEntity() {
+    networld = nullptr;
+}
+
+NetWorld* NetEntity::get_networld() const {
+    return networld;
 }
 
 void NetEntity::_notification(int p_what) {
     switch (p_what) {
         case NOTIFICATION_READY :
+            if (Engine::get_singleton()->is_editor_hint()) {
+                return;
+            }
             call_deferred("bake");
             break;
         case Node3D::NOTIFICATION_TRANSFORM_CHANGED :
