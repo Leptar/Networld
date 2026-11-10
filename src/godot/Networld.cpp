@@ -32,7 +32,7 @@ void NetWorld::bind_view_to_server_player(Node3D* visual_node) {
 }
 
 NetWorld::NetWorld() {
-    ERR_FAIL_COND(networld_ != nullptr);
+    ERR_FAIL_COND(networld_ != nullptr); // tout le temps vrai vu que je le set dans register et donc au demarrage de l'editeur
     networld_ = this;
 }
 
