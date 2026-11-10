@@ -17,6 +17,8 @@ namespace godot {
         // Pointeur vers le parent visuel
         Node3D* parent_node3d = nullptr;
 
+        uint64_t flecs_entity_id_ = 0;
+
         // Le chemin (NodePath) vers le singleton NetWorld dans l'arbre de scène Godot
         NodePath networld_path;
 
@@ -31,6 +33,7 @@ namespace godot {
         NodePath get_networld_path() const;
 
         void _ready() override;
+        void _notification(int p_what);
         void bake();
     };
 

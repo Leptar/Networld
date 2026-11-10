@@ -9,6 +9,7 @@
 
 #include "Networld.h"
 #include "../components.h"
+#include "godot_cpp/classes/canvas_item.hpp"
 
 using namespace godot;
 
@@ -39,6 +40,25 @@ void NetEntity::_ready() {
     }
 
     call_deferred("bake");
+}
+
+void NetEntity::_notification(int p_what) {
+    switch (p_what) {
+        case NOTIFICATION_READY :
+            call_deferred("bake");
+            break;
+        case Node3D::NOTIFICATION_TRANSFORM_CHANGED :
+            // TODO Notifier networld que le node a changer de position
+            break;
+        case NOTIFICATION_EXIT_TREE :
+            if (flecs_entity_id_ != 0) {
+                // TODO destroy entity. y a encore des trou dans le lot c'est un peu space
+                // net_world->destroy_entity(flecs_entity_id_);
+                flecs_entity_id_ = 0;
+            }
+        default:
+            break;
+    }
 }
 
 void NetEntity::bake() {

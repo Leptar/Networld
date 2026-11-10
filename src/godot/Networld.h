@@ -10,6 +10,7 @@
 #include <memory>
 #include "flecs.h"
 #include "NetRegistry.h"
+#include "NetworldCore.h"
 #include "../core/INetTransport.h"
 #include "../core/NetBatch.h"
 
@@ -20,12 +21,7 @@ namespace godot {
         GDCLASS(NetWorld, Node);
 
     private:
-        flecs::world ecs;
-        NetRegistry registry;
-        std::unique_ptr<INetTransport> transport;
-        bool is_server = false;
-        NetBatch extract_batch(flecs::iter& it) const;
-        void apply_batches(const std::vector<NetBatch>& batches);
+        networld::NetWorldCore core_;
 
     protected:
         static void _bind_methods();
@@ -37,7 +33,7 @@ namespace godot {
         void host(int port);
         void join(String ip, int port);
 
-        void spawn_local_entity(Vector3 pos, Node3D* visual_node);
+        uint64_t spawn_local_entity(Vector3 pos, Node3D* visual_node);
         void bind_view_to_server_player(Node3D* visual_node);
 
         void _process(double delta) override;
