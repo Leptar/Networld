@@ -21,7 +21,7 @@ namespace godot {
 
         uint64_t flecs_entity_id_ = 0;
 
-        // Le chemin (NodePath) vers le singleton NetWorld dans l'arbre de scène Godot
+        // singleton NetWorld
         NetWorld* networld;
 
     protected:

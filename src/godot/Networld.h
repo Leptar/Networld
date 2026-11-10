@@ -12,7 +12,6 @@
 #include "NetRegistry.h"
 #include "NetworldCore.h"
 #include "../core/INetTransport.h"
-#include "../core/NetBatch.h"
 
 namespace godot {
     class Node3D;
@@ -21,6 +20,7 @@ namespace godot {
         GDCLASS(NetWorld, Node);
 
         static NetWorld *networld_;
+
         networld::NetWorldCore core_;
 
     protected:

@@ -13,9 +13,8 @@
 using namespace godot;
 
 void NetEntity::_bind_methods() {
-    ClassDB::bind_method(D_METHOD("get_networld_path"), &NetEntity::get_networld);
+    ClassDB::bind_method(D_METHOD("get_networld"), &NetEntity::get_networld);
     ClassDB::bind_method(D_METHOD("bake"), &NetEntity::bake);
-    ADD_PROPERTY(PropertyInfo(Variant::NODE_PATH, "networld_path"), "set_networld_path", "get_networld_path");
 }
 
 NetEntity::NetEntity() {
@@ -55,20 +54,17 @@ void NetEntity::_notification(int p_what) {
 }
 
 void NetEntity::bake() {
-    parent_node3d = Object::cast_to<Node3D>(get_parent());
+    parent_node3d = cast_to<Node3D>(get_parent());
     if (!parent_node3d) {
         UtilityFunctions::printerr("[NetEntity] Erreur : Le parent de NetEntity doit etre un Node3D !");
         return;
     }
 
-    Node* networld_node = get_node_or_null(networld_path);
-    auto* net_world = cast_to<NetWorld>(networld_node);
-
-    if (!net_world) {
-        UtilityFunctions::printerr("[NetEntity] Erreur : NetWorld introuvable au chemin specifie : ", networld_path);
+    if (!networld) {
+        UtilityFunctions::printerr("[NetEntity] Erreur : NetWorld est nullptr");
         return;
     }
 
     Vector3 initial_pos = parent_node3d->get_global_position();
-    net_world->spawn_local_entity(initial_pos, parent_node3d);
+    networld->spawn_local_entity(initial_pos, parent_node3d);
 }

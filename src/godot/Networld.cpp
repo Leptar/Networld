@@ -5,8 +5,10 @@
 #include "NetWorld.h"
 #include "flecs.h"
 #include "GodotUDPTransport.h"
+#include "godot_cpp/classes/node3d.hpp"
 
 using namespace godot;
+
 NetWorld *NetWorld::networld_ = nullptr;
 
 void NetWorld::_bind_methods() {
