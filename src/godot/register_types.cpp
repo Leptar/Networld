@@ -4,8 +4,9 @@
 #include <godot_cpp/core/defs.hpp>
 #include <godot_cpp/godot.hpp>
 
+#include "GodotUDPTransport.h"
 #include "NetEntity.h"
-#include "NetWorld.h"
+#include "Networld.h"
 #include "godot_cpp/classes/engine.hpp"
 
 using namespace godot;
@@ -20,6 +21,11 @@ void initialize_networld_module(ModuleInitializationLevel p_level) {
     ClassDB::register_class<NetWorld>();
     networld_instance = memnew(NetWorld);
     Engine::get_singleton()->register_singleton("Networld",NetWorld::get_networld());
+
+    NetWorld::register_transport("Godot UDP", []() {
+            return std::make_unique<GodotUdpTransport>();
+        });
+
     ClassDB::register_class<NetEntity>();
 }
 

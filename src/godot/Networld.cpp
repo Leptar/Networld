@@ -6,10 +6,37 @@
 #include "flecs.h"
 #include "GodotUDPTransport.h"
 #include "godot_cpp/classes/node3d.hpp"
+#include "godot_cpp/classes/project_settings.hpp"
 
 using namespace godot;
 
 NetWorld *NetWorld::networld_ = nullptr;
+std::vector<NetWorld::TransportEntry> NetWorld::transport_registry_;
+
+void NetWorld::_on_settings_changed() {
+    ProjectSettings *ps = ProjectSettings::get_singleton();
+    String setting_path = "network/networld/default_transport";
+
+    if (ps->has_setting(setting_path)) {
+        String new_setting = ps->get_setting(setting_path);
+        if (new_setting != current_transport_name_) {
+            current_transport_name_ = new_setting;
+            core_.set_transport(create_transport());
+        }
+    }
+}
+
+std::unique_ptr<INetTransport> NetWorld::create_transport() const {
+    for (const auto& entry : transport_registry_) {
+        if (entry.name == current_transport_name_) {
+            return entry.factory();
+        }
+    }
+    // sécurité au cas ou le nom n'est pas trouvé
+    ERR_PRINT("Transport introuvable: " + current_transport_name_ + ". Fallback sur Godot UDP.");
+    return std::make_unique<GodotUdpTransport>();
+
+}
 
 void NetWorld::_bind_methods() {
     ClassDB::bind_method(D_METHOD("host", "port"), &NetWorld::host);
@@ -19,6 +46,10 @@ void NetWorld::_bind_methods() {
             "bind_view_to_server_player",
             "visual_node"),
         &NetWorld::bind_view_to_server_player);
+}
+
+void NetWorld::register_transport(const String &name, TransportFactory factory) {
+    transport_registry_.push_back({name, factory});
 }
 
 NetWorld* NetWorld::get_networld() {
@@ -34,6 +65,35 @@ void NetWorld::bind_view_to_server_player(Node3D* visual_node) {
 NetWorld::NetWorld() {
     ERR_FAIL_COND(networld_ != nullptr); // tout le temps vrai vu que je le set dans register et donc au demarrage de l'editeur
     networld_ = this;
+
+    ProjectSettings *ps = ProjectSettings::get_singleton();
+    String setting_path = "network/networld/default_transport";
+
+    if (!ps->has_setting(setting_path)) {
+        ps->set_setting(setting_path, "Godot UDP");
+    }
+    ps->set_initial_value(setting_path, "Godot UDP");
+
+    // options pour le menu déroulant de l'éditeur
+    String hint_string = "";
+    for (size_t i = 0; i < transport_registry_.size(); ++i) {
+        if (i > 0) hint_string += ",";
+        hint_string += transport_registry_[i].name;
+    }
+
+    Dictionary prop_info;
+    prop_info["name"] = setting_path;
+    prop_info["type"] = Variant::STRING; // On utilise un String
+    prop_info["hint"] = PROPERTY_HINT_ENUM;
+    prop_info["hint_string"] = hint_string; // par ex: "Godot UDP,Steam,ENet"
+    ps->add_property_info(prop_info);
+
+    current_transport_name_ = ps->get_setting(setting_path);
+    core_.set_transport(create_transport());
+
+    if (!ps->is_connected("settings_changed", callable_mp(this, &NetWorld::_on_settings_changed))) {
+        ps->connect("settings_changed", callable_mp(this, &NetWorld::_on_settings_changed));
+    }
 }
 
 NetWorld::~NetWorld() {
