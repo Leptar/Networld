@@ -1,6 +1,5 @@
 extends Node
 
-var net_world: NetWorld
 var mesh_instance: MeshInstance3D
 var vbox: VBoxContainer # On stocke la référence directe ici
 
@@ -31,21 +30,17 @@ func _ready() -> void:
 	vbox.add_child(btn_client)
 
 func _on_host_pressed() -> void:
-	net_world = NetWorld.new()
-	net_world.name = "HostWorld"
-	add_child(net_world)
-	net_world.host(7070)
+	add_child(Networld)
+	Networld.host(7070)
 	
-	net_world.bind_view_to_server_player(mesh_instance)
+	Networld.bind_view_to_server_player(mesh_instance)
 	print("[HOST] Démarré ! Le cube avance sur l'axe X grâce à Flecs (Velocity).")
 	vbox.hide() # Utilisation de la référence sécurisée
 
 func _on_client_pressed() -> void:
-	net_world = NetWorld.new()
-	net_world.name = "ClientWorld"
-	add_child(net_world)
-	net_world.join("127.0.0.1", 7070)
-	
-	net_world.bind_view_to_server_player(mesh_instance)
+	add_child(Networld)
+	Networld.join("127.0.0.1", 7070)
+
+	Networld.bind_view_to_server_player(mesh_instance)
 	print("[CLIENT] Connecté ! Le cube devrait suivre les paquets UDP du Host.")
 	vbox.hide() # Utilisation de la référence sécurisée
