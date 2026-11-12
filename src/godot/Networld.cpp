@@ -2,6 +2,8 @@
 // Created by leoul on 2026-11-02.
 //
 
+#include <utility>
+
 #include "NetWorld.h"
 #include "flecs.h"
 #include "GodotUDPTransport.h"
@@ -49,7 +51,7 @@ void NetWorld::_bind_methods() {
 }
 
 void NetWorld::register_transport(const String &name, TransportFactory factory) {
-    transport_registry_.push_back({name, factory});
+    transport_registry_.push_back({name, std::move(factory)});
 }
 
 NetWorld* NetWorld::get_networld() {
@@ -60,6 +62,16 @@ void NetWorld::bind_view_to_server_player(Node3D* visual_node) {
     if (!visual_node) return;
     uint64_t handle = visual_node->get_instance_id();
     core_.bind_external_view("ServerPlayer", handle);
+}
+
+void NetWorld::set_entity_velocity(uint64_t entity_id, const Vector3 &velocity) {
+    networld::Vec3 vel = {velocity.x, velocity.y, velocity.z};
+    core_.set_entity_velocity(entity_id, vel);
+}
+
+void NetWorld::set_entity_position(uint64_t entity_id, const Vector3 &pos) {
+    networld::Vec3 position = {pos.x, pos.y, pos.z};
+    core_.set_entity_position(entity_id, position);
 }
 
 NetWorld::NetWorld() {
@@ -103,12 +115,12 @@ NetWorld::~NetWorld() {
 }
 
 void NetWorld::host(int port) {
-    core_.set_transport(std::make_unique<GodotUdpTransport>());
+    core_.set_transport(create_transport());
     core_.start_host(port);
 }
 
 void NetWorld::join(String ip, int port) {
-    core_.set_transport(std::make_unique<GodotUdpTransport>());
+    core_.set_transport(create_transport());
     core_.start_client(ip.utf8().get_data(), port);
 }
 
