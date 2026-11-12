@@ -11,3 +11,7 @@ script = ExtResource("1_dxygs")
 [node name="MeshInstance3D" type="MeshInstance3D" parent="." unique_id=893901348]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.7375102, -0.006978512, 4.7013845)
 mesh = SubResource("BoxMesh_7se6e")
+
+[node name="DirectionalLight3D" type="DirectionalLight3D" parent="." unique_id=986618252]
+transform = Transform3D(0.9999301, -0.011826256, 0, 0.005598859, 0.47339305, 0.8808335, -0.010416963, -0.88077193, 0.47342616, 0, 0, 0)
+shadow_enabled = true
