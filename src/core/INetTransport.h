@@ -10,15 +10,25 @@
 #include <vector>
 #include <string>
 
+static constexpr uint32_t PEER_BROADCAST = 0;
+static constexpr uint32_t PEER_SERVER = 1;
+
 enum class NetChannel : uint8_t {
     UNRELIABLE_STATE = 0,
     RELIABLE_EVENTS = 1
+};
+
+enum class NetEvent : uint8_t {
+    CONNECTED = 0,
+    DISCONNECTED = 1,
+    DATA = 2
 };
 
 struct NetPacket {
     uint32_t sender_peer_id;
     NetChannel channel;
     std::vector<uint8_t> payload;
+    NetEvent event = NetEvent::DATA;
 };
 
 class INetTransport {
