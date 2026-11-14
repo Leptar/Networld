@@ -13,6 +13,12 @@ sources = Glob("build/src/*.cpp") + Glob("build/src/core/*.cpp") + Glob("build/s
 env.Append(CPPPATH=["thirdparty/flecs"])
 sources.append("build/thirdparty/flecs/flecs.c")
 
+if env["platform"] == "windows":
+    env.Append(LIBS=["ws2_32"])
+    env.Append(CXXFLAGS=["/std:c++20"])
+else:
+   env.Append(CXXFLAGS=["-std=c++20"])
+   
 if env["platform"] == "macos":
     library = env.SharedLibrary(
         "demo/bin/Networld.{}.{}.framework/Networld.{}.{}".format(
@@ -37,10 +43,6 @@ else:
         source=sources,
     )
 
-if env["platform"] == "windows":
-    env.Append(LIBS=["ws2_32"])
-    env.Append(CXXFLAGS=["/std:c++20"])
-else:
-   env.Append(CXXFLAGS=["-std=c++20"])
+
 
 Default(library)
