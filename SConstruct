@@ -39,5 +39,8 @@ else:
 
 if env["platform"] == "windows":
     env.Append(LIBS=["ws2_32"])
+    env.Append(CXXFLAGS=["/std:c++20"])
+else:
+   env.Append(CXXFLAGS=["-std=c++20"])
 
 Default(library)
