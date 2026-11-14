@@ -6,12 +6,13 @@ Bienvenue dans le dossier **Devlog** de **Networld**. Ce dossier te permet de ga
 
 ## 📌 Point de Reprise Rapide (À mettre à jour en fin de session)
 
-- **Dernière mise à jour :** `2026-11-13` (Branche `network-logic`, Commit `65dbcf3` — *UPDATE Transport*)
-- **État actuel :** Nettoyage `register_types.cpp` / `NetWorld` terminé (`ae905f5`), et `GodotUdpTransport` gère désormais le multi-clients par `peer_id` virtuel, le broadcast (`PEER_BROADCAST`), les événements `NetEvent` (`CONNECTED`/`DISCONNECTED`/`DATA`) et le timeout (`5000 ms`).
+- **Dernière mise à jour :** `2026-11-14` (Branche `network-logic`, Commit `40a3f83` — *ADD PacketDispatcher*)
+- **État actuel :** Passage du projet en C++20 dans `SConstruct`, et implémentation complète des briques de sérialisation et de routage réseau dans `src/core/` : concepts C++20 (`NetStream.h`), `StreamWriter`, `StreamReader` (`std::span` / `std::optional`) et `PacketDispatcher` (`encode_packet` + table 256 handlers).
 - **À faire immédiatement à la reprise :**
-  1. [ ] Dans [NetworldCore.cpp](file:///c:/Users/leoul/Godot/Projects/Networld/src/core/NetworldCore.cpp), brancher un switch/dispatch sur `pkt.event` (`CONNECTED`, `DISCONNECTED`, `DATA`) dans `step()`.
-  2. [ ] Définir un en-tête / type de message pour distinguer `knock`, `spawn`, `despawn` et `state_sync` (batches SoA) dans `NetPacket::payload`.
-  3. [ ] Implémenter la logique de spawn/despawn et de synchronisation initiale lors de la connexion et déconnexion d'un client.
+  1. [ ] Vérifier la compilation SCons complète après l'ajout de `PacketDispatcher`.
+  2. [ ] Définir les messages réseau satisfaisant `NetMessage` (`knock`, `spawn`, `despawn`, `state_sync`).
+  3. [ ] Dans [NetworldCore.cpp](file:///c:/Users/leoul/Godot/Projects/Networld/src/core/NetworldCore.cpp), brancher un `switch (pkt.event)` (`CONNECTED`, `DISCONNECTED`, `DATA`) dans `step()` et router `DATA` avec `PacketDispatcher`.
+  4. [ ] Implémenter la logique de spawn/despawn et de synchronisation initiale lors de la connexion et déconnexion d'un client.
 
 ---
 
@@ -21,6 +22,7 @@ Bienvenue dans le dossier **Devlog** de **Networld**. Ce dossier te permet de ga
 | :--- | :--- |
 | **[00_ARCHITECTURE_COMPLETE.md](file:///c:/Users/leoul/Godot/Projects/Networld/devlog/00_ARCHITECTURE_COMPLETE.md)** | **Bilan complet du projet (2 Nov → 12 Nov 2026)** : Architecture `Core` vs `Godot`, explication détaillée de chaque fichier, schémas Mermaid (Flux, Sérialisation SoA, Boucle `step`), et choix techniques. |
 | **[01_2026-11-13_transport_multi_clients.md](file:///c:/Users/leoul/Godot/Projects/Networld/devlog/01_2026-11-13_transport_multi_clients.md)** | **Session #01 (13 Nov 2026)** : Transport UDP multi-clients par `peer_id`, broadcast, timeouts et événements `NetEvent` sur `network-logic`. |
+| **[02_2026-11-14_stream_et_packet_dispatcher.md](file:///c:/Users/leoul/Godot/Projects/Networld/devlog/02_2026-11-14_stream_et_packet_dispatcher.md)** | **Session #02 (14 Nov 2026)** : Migration C++20 (`SConstruct`), concepts (`NetStream.h`), `StreamWriter`/`StreamReader` et `PacketDispatcher`. |
 | **[TEMPLATE_DEVLOG.md](file:///c:/Users/leoul/Godot/Projects/Networld/devlog/TEMPLATE_DEVLOG.md)** | **Modèle de session** à copier-coller à chaque nouvelle session de code (`01_YYYY-MM-DD_sujet.md`, `02_...`). |
 
 ---
@@ -31,7 +33,8 @@ Bienvenue dans le dossier **Devlog** de **Networld**. Ce dossier te permet de ga
 | :--- | :--- | :--- | :--- | :--- |
 | **[#00](file:///c:/Users/leoul/Godot/Projects/Networld/devlog/00_ARCHITECTURE_COMPLETE.md)** | `2026-11-02` → `2026-11-12` | ~10 jours | Fondations GDExtension + Flecs, Sérialisation SoA (`NetBatch`), Découplage `NetWorldCore`, Singleton & `ProjectSettings` | 🟢 Terminé (nettoyage final fait en `ae905f5`) |
 | **[#01](file:///c:/Users/leoul/Godot/Projects/Networld/devlog/01_2026-11-13_transport_multi_clients.md)** | `2026-11-13` | `3h 30m` | Transport UDP multi-clients (`peer_id`, broadcast, timeout, `NetEvent`) sur `network-logic` | 🟡 En cours (dispatcher / sync / spawn à faire) |
-| *#02* | *À venir* | *—* | *Copier `TEMPLATE_DEVLOG.md` vers `02_YYYY-MM-DD_titre.md`* | *—* |
+| **[#02](file:///c:/Users/leoul/Godot/Projects/Networld/devlog/02_2026-11-14_stream_et_packet_dispatcher.md)** | `2026-11-14` | `7h 47m` | Migration C++20, `NetStream` (concepts), `StreamWriter`/`StreamReader` et `PacketDispatcher` | 🟡 En cours (câblage dans `NetWorldCore` à faire) |
+| *#03* | *À venir* | *—* | *Copier `TEMPLATE_DEVLOG.md` vers `03_YYYY-MM-DD_titre.md`* | *—* |
 
 ---
 
