@@ -7,6 +7,7 @@
 #pragma once
 #include <memory>
 #include <string>
+#include <unordered_map>
 #include <vector>
 #include "flecs.h"
 #include "NetComponent.h"
@@ -23,6 +24,11 @@ class NetWorldCore {
     NetRegistry registry_;
     std::unique_ptr<INetTransport> transport_;
     bool is_server_ = false;
+
+    std::unordered_map<uint64_t, uint64_t> net_to_local_entities_; // (server_entity_id -> local_entity_id)
+    std::unordered_map<uint32_t, uint64_t> peer_entities_; // (peer_id -> server_entity_id)
+
+    // tick for message
     uint32_t current_tick_ = 0;
     uint32_t last_received_tick_ = 0;
     PacketDispatcher packet_dispatcher_;
@@ -36,6 +42,10 @@ class NetWorldCore {
     // traduction Flecs <-> NetBatch
     NetBatch extract_batch(const flecs::iter& it) const;
     void apply_batches(const std::vector<NetBatch>& batches) const;
+
+    // call in switch
+    void on_peer_connected(uint32_t peer_id);
+    void on_peer_disconnected(uint32_t peer_id);
 
 public:
     NetWorldCore();
@@ -66,7 +76,7 @@ public:
     void destroy_entity(uint64_t entity_id);
     uint64_t find_entity(const char* name) const;
 
-    void bind_external_view(const char* name, uint64_t host_handle);
+    void bind_entity_view(uint64_t entity_id, uint64_t host_handle);
     void set_entity_position(uint64_t entity_id, const Vec3& pos);
     void set_entity_velocity(uint64_t entity_id, const Vec3& vel);
 
@@ -75,6 +85,9 @@ public:
 
     // pour des tests ou  d'autre systèmes au cas ou
     flecs::world& get_ecs() { return ecs_; }
+
+    std::vector<EntitySpawnEntry> spawned_entities_;
+    std::vector<uint64_t> despawned_entities_;
 };
 
 } // namespace networld

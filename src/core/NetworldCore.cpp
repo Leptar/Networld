@@ -53,13 +53,63 @@ namespace networld {
                 if (local_id == 0 || col.element_size == 0) continue;
 
                 for (size_t i = 0; i < entity_count; ++i) {
-                    flecs::entity_t entity_id = batch.entities[i];
+                    auto it = net_to_local_entities_.find(batch.entities[i]);
+                    if (it == net_to_local_entities_.end()) continue;
+                    flecs::entity_t entity_id = it->second;
                     if (!ecs_.is_alive(entity_id)) continue;
 
                     const uint8_t* elem_ptr = col.payload.data() + (i * col.element_size);
                     ecs_set_id(ecs_.c_ptr(), entity_id, local_id, col.element_size, elem_ptr);
                 }
             }
+        }
+    }
+
+    void NetWorldCore::on_peer_connected(uint32_t peer_id) {
+        if (!is_server_) return;
+
+        // entity du joueur
+        uint64_t new_entity_id = create_networked_entity(Vec3{0,5,0});
+        peer_entities_[peer_id] = new_entity_id;
+        spawned_entities_.push_back({new_entity_id, Vec3{0, 5, 0}});
+
+        // send au nouveau joueur ce qui existe deja
+        auto query = ecs_.query_builder<const Position3D>().with<Networked>().build();
+        query.each([&](flecs::entity e, const Position3D& pos) {
+            SpawnEntityMsg msg{e.id(), pos.value, Vec3{}};
+            auto bytes = encode_packet(msg);
+            transport_->send(peer_id, NetChannel::RELIABLE_EVENTS, bytes.data(), bytes.size());
+        });
+
+        // broadcast sont arrivé
+        SpawnEntityMsg new_msg{new_entity_id, Vec3{0,5,0}, Vec3{}};
+        auto out = encode_packet(new_msg);
+        for (const auto& [other_peer_id, _] : peer_entities_) {
+            if (other_peer_id != peer_id) {
+                transport_->send(other_peer_id, NetChannel::RELIABLE_EVENTS, out.data(), out.size());
+            }
+        }
+    }
+
+    void NetWorldCore::on_peer_disconnected(uint32_t peer_id) {
+        if (!is_server_) return;
+
+        auto it = peer_entities_.find(peer_id);
+        if (it == peer_entities_.end()) return;
+
+        uint64_t entity_id = it->second;
+        peer_entities_.erase(it);
+        destroy_entity(entity_id);
+        despawned_entities_.push_back(entity_id);
+
+        auto out = encode_packet(DespawnEntityMsg{entity_id});
+        transport_->send(PEER_BROADCAST, NetChannel::RELIABLE_EVENTS, out.data(), out.size());
+    }
+
+    void NetWorldCore::bind_entity_view(uint64_t entity_id, uint64_t host_handle) {
+        flecs::entity e = ecs_.entity(entity_id);
+        if (e.is_alive() && host_handle != 0) {
+            e.set<ExternalView>({host_handle});
         }
     }
 
@@ -113,19 +163,22 @@ namespace networld {
 
         packet_dispatcher_ = PacketDispatcher{};
         packet_dispatcher_.register_handler<KnockMsg>([](uint32_t peer_id, const KnockMsg&) {
-            printf("NetWorldCore::start_host : peer ready\n");
+            printf("NetWorldCore::start_host : peer %u ready\n", peer_id);
         });
 
+        peer_entities_.clear();
+        net_to_local_entities_.clear();
+        current_tick_ = 0;
         last_received_tick_ = 0;
         is_server_ = true;
         transport_->open_as_host(port);
 
         // Entite serveur de test
-        ecs_.entity("ServerPlayer")
+        auto server_player = ecs_.entity("ServerPlayer")
            .set<Position3D>({Vec3(0, 5, 0)})
            .set<Velocity3D>({Vec3(1, 0, 0)})
            .add<Networked>();
-
+        spawned_entities_.push_back({server_player.id(), Vec3(0, 5, 0)});
         return true;
     }
 
@@ -133,19 +186,47 @@ namespace networld {
         if (!transport_) return false;
 
         packet_dispatcher_ = PacketDispatcher{};
+
         packet_dispatcher_.register_handler<StateSyncMsg>([this](uint32_t /*peer_id*/, const StateSyncMsg& msg) {
             if (msg.tick <= last_received_tick_) return;
             last_received_tick_ = msg.tick;
             apply_batches(msg.batches);
+
+            if (msg.tick % 60 == 0 || last_received_tick_ == 0) {
+                printf("[CLIENT] StateSync tick=%u batches=%zu\n", msg.tick, msg.batches.size());
+                fflush(stdout);
+            }
         });
 
+        packet_dispatcher_.register_handler<SpawnEntityMsg>([this](uint32_t , const SpawnEntityMsg& msg) {
+            if (net_to_local_entities_.contains(msg.entity_Id)) return;
+
+            uint64_t local_id = create_networked_entity(msg.position);
+            net_to_local_entities_[msg.entity_Id] = local_id;
+
+            spawned_entities_.push_back({local_id, msg.position});
+
+            printf("[CLIENT] SpawnEntityMsg server_id=%llu -> local_id=%llu (%.2f, %.2f, %.2f)\n",
+                    msg.entity_Id, local_id, msg.position.x, msg.position.y, msg.position.z);
+            fflush(stdout);
+        });
+
+        packet_dispatcher_.register_handler<DespawnEntityMsg>([this](uint32_t , const DespawnEntityMsg& msg) {
+            auto it = net_to_local_entities_.find(msg.entity_Id);
+            if (it == net_to_local_entities_.end()) return;
+
+            despawned_entities_.push_back(it->second);
+
+            destroy_entity(it->second);
+            net_to_local_entities_.erase(it);
+        });
+
+        peer_entities_.clear();
+        net_to_local_entities_.clear();
+        current_tick_ = 0;
         last_received_tick_ = 0;
         is_server_ = false;
         transport_->open_as_client(host_ip, port);
-        ecs_.entity("ServerPlayer")
-            .set<Position3D>({Vec3(0, 0, 0)})
-            .set<Velocity3D>({Vec3(0, 0, 0)})
-            .add<Networked>();
 
         auto knock = encode_packet(KnockMsg{});
         transport_->send(PEER_SERVER, NetChannel::RELIABLE_EVENTS, knock.data(), knock.size());
@@ -166,10 +247,10 @@ namespace networld {
             // je check les events du packet pour voir comment traiter le packet
             switch (pkt.event) {
                 case NetEvent::CONNECTED :
-                    // TODO
+                    on_peer_connected(pkt.sender_peer_id);
                     break;
                 case NetEvent::DISCONNECTED :
-                    // TODO
+                    on_peer_disconnected(pkt.sender_peer_id);
                     break;
                 case NetEvent::DATA :
                     if (!packet_dispatcher_.dispatch(pkt.sender_peer_id, pkt.payload)) {
@@ -177,7 +258,7 @@ namespace networld {
                     }
                     break;
                 default:
-                    // Bro wtf ?
+                    printf("Bro wtf ?");
                     break;
             }
         }
@@ -246,13 +327,6 @@ namespace networld {
         flecs::entity e = ecs_.lookup(name);
         return e.id();
 
-    }
-
-    void NetWorldCore::bind_external_view(const char* name, uint64_t host_handle) {
-        flecs::entity e = ecs_.entity(name);
-        if (e.is_alive()) {
-            e.set<ExternalView>({host_handle});
-        }
     }
 
     void NetWorldCore::set_entity_position(uint64_t entity_id, const Vec3 &pos) {

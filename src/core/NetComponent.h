@@ -45,6 +45,11 @@ namespace networld {
         Vec3 position;
     };
 
+    struct EntitySpawnEntry {
+        uint64_t entity_id = 0;
+        Vec3 position;
+    };
+
 } // namespace networld
 
 #endif //NETWORLD_NETCOMPONENT_H

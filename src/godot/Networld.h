@@ -37,9 +37,10 @@ namespace godot {
         void join(String ip, int port);
 
         uint64_t spawn_local_entity(Vector3 pos, Node3D* visual_node);
-        void bind_view_to_server_player(Node3D* visual_node);
         void set_entity_velocity(uint64_t entity_id, const Vector3& velocity);
         void set_entity_position(uint64_t entity_id, const Vector3& pos);
+
+        void bind_entity_view(uint64_t id, Node3D* visual_node);
 
         void _process(double delta) override;
     private:
