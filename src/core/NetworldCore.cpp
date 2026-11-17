@@ -7,6 +7,7 @@
 #include "deserialization.h"
 #include "serialization.h"
 #include "../../thirdparty/flecs/flecs.h"
+#include "NetMessage.h"
 
 namespace networld {
 
