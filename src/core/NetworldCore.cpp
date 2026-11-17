@@ -4,8 +4,7 @@
 
 #include "NetworldCore.h"
 #include "NetComponent.h"
-#include "deserialization.h"
-#include "serialization.h"
+#include <cstdio>
 #include "../../thirdparty/flecs/flecs.h"
 #include "NetMessage.h"
 
@@ -111,6 +110,13 @@ namespace networld {
 
     bool NetWorldCore::start_host(uint16_t port) {
         if (!transport_) return false;
+
+        packet_dispatcher_ = PacketDispatcher{};
+        packet_dispatcher_.register_handler<KnockMsg>([](uint32_t peer_id, const KnockMsg&) {
+            printf("NetWorldCore::start_host : peer ready\n");
+        });
+
+        last_received_tick_ = 0;
         is_server_ = true;
         transport_->open_as_host(port);
 
@@ -125,6 +131,15 @@ namespace networld {
 
     bool NetWorldCore::start_client(const std::string &host_ip, uint16_t port) {
         if (!transport_) return false;
+
+        packet_dispatcher_ = PacketDispatcher{};
+        packet_dispatcher_.register_handler<StateSyncMsg>([this](uint32_t /*peer_id*/, const StateSyncMsg& msg) {
+            if (msg.tick <= last_received_tick_) return;
+            last_received_tick_ = msg.tick;
+            apply_batches(msg.batches);
+        });
+
+        last_received_tick_ = 0;
         is_server_ = false;
         transport_->open_as_client(host_ip, port);
         ecs_.entity("ServerPlayer")
@@ -132,8 +147,8 @@ namespace networld {
             .set<Velocity3D>({Vec3(0, 0, 0)})
             .add<Networked>();
 
-        uint8_t knock_packet = 0xFF;
-        transport_->send(1, NetChannel::UNRELIABLE_STATE, &knock_packet, 1);
+        auto knock = encode_packet(KnockMsg{});
+        transport_->send(PEER_SERVER, NetChannel::RELIABLE_EVENTS, knock.data(), knock.size());
         return true;
     }
 
@@ -148,17 +163,52 @@ namespace networld {
         transport_->poll();
         NetPacket pkt;
         while (transport_->recv(pkt)) {
-            std::vector<NetBatch> batches = deserialize_buffer(pkt.payload.data(), pkt.payload.size());
-            apply_batches(batches);
+            // je check les events du packet pour voir comment traiter le packet
+            switch (pkt.event) {
+                case NetEvent::CONNECTED :
+                    // TODO
+                    break;
+                case NetEvent::DISCONNECTED :
+                    // TODO
+                    break;
+                case NetEvent::DATA :
+                    if (!packet_dispatcher_.dispatch(pkt.sender_peer_id, pkt.payload)) {
+                        printf("NetWorldCore::step case Data: error packet dispatcher\n");
+                    }
+                    break;
+                default:
+                    // Bro wtf ?
+                    break;
+            }
         }
 
         // SIMULATION ECS
         view_updates_.clear();
+        current_tick_++;
         ecs_.progress(delta_time);
 
         // EGRESS : Extraction NetWorld -> Sérialisation pure -> Réseau
         if (is_server_) {
-            std::vector<uint8_t> out_buffer;
+            // broadcast le sync state msg pour les autres clients
+            StateSyncMsg sync_msg;
+            sync_msg.tick = current_tick_;
+
+            auto query = ecs_.query_builder<Position3D, Velocity3D>().with<Networked>().build();
+            query.run([&](flecs::iter& it) {
+                while (it.next()) {
+                    NetBatch batch = extract_batch(it);
+                    if (!batch.entities.empty()) {
+                        sync_msg.batches.push_back(std::move(batch));
+                    }
+                }
+            });
+
+            if (!sync_msg.batches.empty()) {
+                std::vector<uint8_t> out = encode_packet(sync_msg);
+                transport_->send(PEER_BROADCAST, NetChannel::UNRELIABLE_STATE, out.data(), out.size());
+            }
+
+            /*std::vector<uint8_t> out_buffer;
             auto query = ecs_.query_builder<Position3D, Velocity3D>().with<Networked>().build();
 
             query.run([&](flecs::iter& it) {
@@ -171,7 +221,7 @@ namespace networld {
 
             if (!out_buffer.empty()) {
                 transport_->send(0, NetChannel::UNRELIABLE_STATE, out_buffer.data(), out_buffer.size());
-            }
+            }*/
         }
 
     }

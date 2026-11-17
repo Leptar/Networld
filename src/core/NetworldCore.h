@@ -13,6 +13,7 @@
 #include "NetRegistry.h"
 #include "NetBatch.h"
 #include "INetTransport.h"
+#include "PacketDispatcher.h"
 
 namespace networld {
 
@@ -23,6 +24,8 @@ class NetWorldCore {
     std::unique_ptr<INetTransport> transport_;
     bool is_server_ = false;
     uint32_t current_tick_ = 0;
+    uint32_t last_received_tick_ = 0;
+    PacketDispatcher packet_dispatcher_;
 
     // output stamp contenant les transformations à appliquer aux nœuds visuels du moteur
     std::vector<ViewSyncEntry> view_updates_;
