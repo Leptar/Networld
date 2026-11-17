@@ -23,6 +23,7 @@ namespace networld {
         SPAWN_ENTITY = 2,
         DESPAWN_ENTITY = 3,
         STATE_SYNC = 4,
+        INPUT = 5,
     };
 
     struct KnockMsg {
@@ -114,6 +115,28 @@ namespace networld {
         }
     };
     static_assert(NetMessage<StateSyncMsg>);
+
+    struct InputMsg {
+        static constexpr PacketId PACKET_ID = PacketId::INPUT;
+        uint64_t tick_input = 0;
+        Vec3 direction{};
+
+        void serialize(StreamWriter& stream) const {
+            stream.write<uint64_t>(tick_input);
+            stream.write_vec3(direction);
+        }
+
+        static std::optional<InputMsg> deserialize(StreamReader& stream) {
+            const auto tick_input = stream.read<uint64_t>();
+            const auto direction = stream.read_vec3();
+            if (!tick_input || !direction) {
+                return std::nullopt;
+            }
+
+            return InputMsg{*tick_input, *direction};
+        }
+    };
+    static_assert(NetMessage<InputMsg>);
 } // networld
 
 #endif //NETWORLD_NETMESSAGE_H

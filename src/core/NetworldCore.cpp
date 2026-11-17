@@ -5,6 +5,7 @@
 #include "NetworldCore.h"
 #include "NetComponent.h"
 #include <cstdio>
+#include <cmath>
 #include "../../thirdparty/flecs/flecs.h"
 #include "NetMessage.h"
 
@@ -100,6 +101,7 @@ namespace networld {
         uint64_t entity_id = it->second;
         peer_entities_.erase(it);
         destroy_entity(entity_id);
+        peer_inputs.erase(peer_id);
         despawned_entities_.push_back(entity_id);
 
         auto out = encode_packet(DespawnEntityMsg{entity_id});
@@ -166,8 +168,32 @@ namespace networld {
             // printf("NetWorldCore::start_host : peer %u ready\n", peer_id);
         });
 
+        packet_dispatcher_.register_handler<InputMsg>([this](uint32_t peer_id, const InputMsg& input_msg) {
+            auto it = peer_entities_.find(peer_id);
+            if (it == peer_entities_.end()) return;
+
+            auto it_input = peer_inputs.find(peer_id);
+            if ( it_input != peer_inputs.end()
+                && it_input->second >= input_msg.tick_input) return;
+
+            peer_inputs[peer_id] = input_msg.tick_input;
+
+            Vec3 dir_input;
+            float norme = sqrt(input_msg.direction.x*input_msg.direction.x
+                                 + input_msg.direction.z*input_msg.direction.z);
+
+            dir_input.x = norme > 1 ? input_msg.direction.x/norme : input_msg.direction.x;
+            dir_input.y = 0;
+            dir_input.z = norme > 1 ? input_msg.direction.z/norme : input_msg.direction.z;
+
+            uint64_t entity_id = it->second;
+            set_entity_velocity(entity_id, dir_input*5.0f); // TODO faire une constante de velocité je suppose
+        });
+
         peer_entities_.clear();
         net_to_local_entities_.clear();
+        peer_inputs.clear();
+        input_client_ = Vec3(0, 0, 0);
         current_tick_ = 0;
         last_received_tick_ = 0;
         is_server_ = true;
@@ -223,6 +249,8 @@ namespace networld {
 
         peer_entities_.clear();
         net_to_local_entities_.clear();
+        peer_inputs.clear();
+        input_client_ = Vec3(0, 0, 0);
         current_tick_ = 0;
         last_received_tick_ = 0;
         is_server_ = false;
@@ -288,11 +316,18 @@ namespace networld {
                 std::vector<uint8_t> out = encode_packet(sync_msg);
                 transport_->send(PEER_BROADCAST, NetChannel::UNRELIABLE_STATE, out.data(), out.size());
             }
-        } else if (current_tick_ % 60 == 0){
-            auto knock = encode_packet(KnockMsg{});
-            transport_->send(PEER_SERVER, NetChannel::UNRELIABLE_STATE, knock.data(), knock.size());
-        }
+        } else {
+            if (current_tick_ % 60 == 0){
+                auto knock_pkt = encode_packet(KnockMsg{});
+                transport_->send(PEER_SERVER, NetChannel::UNRELIABLE_STATE, knock_pkt.data(), knock_pkt.size());
+            }
 
+            InputMsg input_msg;
+            input_msg.tick_input = current_tick_;
+            input_msg.direction = input_client_;
+            auto input_pkt = encode_packet(input_msg);
+            transport_->send(PEER_SERVER, NetChannel::UNRELIABLE_STATE, input_pkt.data(), input_pkt.size());
+        }
     }
 
     uint64_t NetWorldCore::create_networked_entity(const Vec3 &initial_pos, uint64_t host_handle, const char *name) {

@@ -2,6 +2,7 @@ extends Node
 
 var views: Dictionary = {} # entity_id (int) -> MeshInstance3D
 var vbox: VBoxContainer
+var is_client: bool = false
 
 func _ready() -> void:
 	# 1. Caméra avec rotation statique
@@ -35,6 +36,7 @@ func _on_host_pressed() -> void:
 	vbox.hide()
 
 func _on_client_pressed() -> void:
+	is_client = true
 	add_child(Networld)
 	Networld.join("127.0.0.1", 7070)
 	print("[CLIENT] Connecté !")
@@ -62,3 +64,10 @@ func _on_entity_despawned(entity_id: int) -> void:
 	if is_instance_valid(cube):
 		cube.queue_free()
 	print("[VIEW] Despawn entité ", entity_id)
+
+func _process(_delta: float) -> void:
+	if not is_client:
+		return
+	
+	var dir: Vector2 = Input.get_vector("ui_left", "ui_right", "ui_up", "ui_down")
+	Networld.set_client_input(Vector3(dir.x, 0.0, dir.y))

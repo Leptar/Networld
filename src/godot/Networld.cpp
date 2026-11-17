@@ -52,6 +52,7 @@ void NetWorld::_bind_methods() {
     ClassDB::bind_method(
         D_METHOD("bind_entity_view", "id", "visual_node"),
         &NetWorld::bind_entity_view);
+    ClassDB::bind_method(D_METHOD("set_client_input", "input"), &NetWorld::set_client_input);
 
     ADD_SIGNAL(MethodInfo("entity_spawned",
         PropertyInfo(Variant::INT, "entity_id"),
@@ -76,6 +77,11 @@ void NetWorld::set_entity_velocity(uint64_t entity_id, const Vector3 &velocity) 
 void NetWorld::set_entity_position(uint64_t entity_id, const Vector3 &pos) {
     networld::Vec3 position = {pos.x, pos.y, pos.z};
     core_.set_entity_position(entity_id, position);
+}
+
+void NetWorld::set_client_input(const Vector3 &input) {
+    networld::Vec3 new_input = {input.x, input.y, input.z};
+    core_.set_client_input(new_input);
 }
 
 NetWorld::NetWorld() {
