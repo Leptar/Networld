@@ -41,8 +41,8 @@ std::unique_ptr<INetTransport> NetWorld::create_transport() const {
 }
 
 void NetWorld::bind_entity_view(uint64_t id, Node3D *visual_node) {
-    if (!visual_node) return;
-    uint64_t handle_id = visual_node ? visual_node->get_instance_id() : 0; // TODO ca va merder
+    ERR_FAIL_NULL_MSG(visual_node, "NetWorld::bind_entity_view : visual_node is null");
+    uint64_t handle_id = visual_node->get_instance_id();
     core_.bind_entity_view(id, handle_id);
 }
 
@@ -119,15 +119,15 @@ NetWorld::~NetWorld() {
 }
 
 void NetWorld::host(int port) {
-    core_.despawned_entities_.clear();
-    core_.spawned_entities_.clear();
+    core_.clear_despawned_entities();
+    core_.clear_spawned_entities();
     core_.set_transport(create_transport());
     core_.start_host(port);
 }
 
 void NetWorld::join(String ip, int port) {
-    core_.despawned_entities_.clear();
-    core_.spawned_entities_.clear();
+    core_.clear_despawned_entities();
+    core_.clear_spawned_entities();
     core_.set_transport(create_transport());
     core_.start_client(ip.utf8().get_data(), port);
 }
@@ -141,7 +141,7 @@ uint64_t NetWorld::spawn_local_entity(Vector3 pos, Node3D *visual_node) {
 void NetWorld::_process(double delta) {
     core_.step(static_cast<float>(delta));
 
-    for (const auto &it : core_.spawned_entities_) {
+    for (const auto &it : core_.get_spawned_entities()) {
         Vector3 entity_pos;
         entity_pos.x = it.position.x;
         entity_pos.y = it.position.y;
@@ -150,7 +150,7 @@ void NetWorld::_process(double delta) {
         emit_signal("entity_spawned", it.entity_id, entity_pos);
     }
 
-    for (const auto &it : core_.despawned_entities_) {
+    for (const auto &it : core_.get_despawned_entities()) {
         emit_signal("entity_despawned", it);
     }
 
@@ -162,6 +162,6 @@ void NetWorld::_process(double delta) {
         }
     }
 
-    core_.despawned_entities_.clear();
-    core_.spawned_entities_.clear();
+    core_.clear_despawned_entities();
+    core_.clear_spawned_entities();
 }

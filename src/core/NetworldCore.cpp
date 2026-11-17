@@ -288,21 +288,6 @@ namespace networld {
                 std::vector<uint8_t> out = encode_packet(sync_msg);
                 transport_->send(PEER_BROADCAST, NetChannel::UNRELIABLE_STATE, out.data(), out.size());
             }
-
-            /*std::vector<uint8_t> out_buffer;
-            auto query = ecs_.query_builder<Position3D, Velocity3D>().with<Networked>().build();
-
-            query.run([&](flecs::iter& it) {
-                while (it.next()) {
-                    NetBatch batch = extract_batch(it);
-                    std::vector<uint8_t> block = serialize_batch(batch);
-                    out_buffer.insert(out_buffer.end(), block.begin(), block.end());
-                }
-            });
-
-            if (!out_buffer.empty()) {
-                transport_->send(0, NetChannel::UNRELIABLE_STATE, out_buffer.data(), out_buffer.size());
-            }*/
         } else if (current_tick_ % 60 == 0){
             auto knock = encode_packet(KnockMsg{});
             transport_->send(PEER_SERVER, NetChannel::UNRELIABLE_STATE, knock.data(), knock.size());

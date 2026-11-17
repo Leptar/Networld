@@ -25,6 +25,9 @@ class NetWorldCore {
     std::unique_ptr<INetTransport> transport_;
     bool is_server_ = false;
 
+    std::vector<EntitySpawnEntry> spawned_entities_;
+    std::vector<uint64_t> despawned_entities_;
+
     std::unordered_map<uint64_t, uint64_t> net_to_local_entities_; // (server_entity_id -> local_entity_id)
     std::unordered_map<uint32_t, uint64_t> peer_entities_; // (peer_id -> server_entity_id)
 
@@ -81,13 +84,14 @@ public:
     void set_entity_velocity(uint64_t entity_id, const Vec3& vel);
 
     // lecture des états
-    const std::vector<ViewSyncEntry>& get_view_updates() { return view_updates_; }
+    [[nodiscard]] const std::vector<ViewSyncEntry>& get_view_updates() const { return view_updates_; }
+    [[nodiscard]] const std::vector<EntitySpawnEntry>& get_spawned_entities() const { return spawned_entities_; }
+    [[nodiscard]] const std::vector<uint64_t>& get_despawned_entities() const { return despawned_entities_; }
+    void clear_despawned_entities() { despawned_entities_.clear(); }
+    void clear_spawned_entities() { spawned_entities_.clear(); }
 
     // pour des tests ou  d'autre systèmes au cas ou
     flecs::world& get_ecs() { return ecs_; }
-
-    std::vector<EntitySpawnEntry> spawned_entities_;
-    std::vector<uint64_t> despawned_entities_;
 };
 
 } // namespace networld

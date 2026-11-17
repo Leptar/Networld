@@ -64,7 +64,7 @@ namespace networld {
 
     struct DespawnEntityMsg {
         static constexpr PacketId PACKET_ID = PacketId::DESPAWN_ENTITY;
-        uint64_t entity_Id;
+        uint64_t entity_Id = 0;
         void serialize(StreamWriter& stream) const {
             stream.write<uint64_t>(entity_Id);
         }
@@ -81,7 +81,7 @@ namespace networld {
 
     struct StateSyncMsg {
         static constexpr PacketId PACKET_ID = PacketId::STATE_SYNC;
-        uint32_t tick;
+        uint32_t tick = 0;
         std::vector<NetBatch> batches;
 
         void serialize(StreamWriter& stream) const {
