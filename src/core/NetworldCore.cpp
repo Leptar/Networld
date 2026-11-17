@@ -1,4 +1,4 @@
-﻿//
+//
 // Created by leoul on 2026-11-09.
 //
 
@@ -162,8 +162,8 @@ namespace networld {
         if (!transport_) return false;
 
         packet_dispatcher_ = PacketDispatcher{};
-        packet_dispatcher_.register_handler<KnockMsg>([](uint32_t peer_id, const KnockMsg&) {
-            printf("NetWorldCore::start_host : peer %u ready\n", peer_id);
+        packet_dispatcher_.register_handler<KnockMsg>([](uint32_t /*peer_id*/, const KnockMsg&) {
+            // printf("NetWorldCore::start_host : peer %u ready\n", peer_id);
         });
 
         peer_entities_.clear();
@@ -193,8 +193,8 @@ namespace networld {
             apply_batches(msg.batches);
 
             if (msg.tick % 60 == 0 || last_received_tick_ == 0) {
-                printf("[CLIENT] StateSync tick=%u batches=%zu\n", msg.tick, msg.batches.size());
-                fflush(stdout);
+                /*printf("[CLIENT] StateSync tick=%u batches=%zu\n", msg.tick, msg.batches.size());
+                fflush(stdout);*/
             }
         });
 
@@ -303,6 +303,9 @@ namespace networld {
             if (!out_buffer.empty()) {
                 transport_->send(0, NetChannel::UNRELIABLE_STATE, out_buffer.data(), out_buffer.size());
             }*/
+        } else if (current_tick_ % 60 == 0){
+            auto knock = encode_packet(KnockMsg{});
+            transport_->send(PEER_SERVER, NetChannel::UNRELIABLE_STATE, knock.data(), knock.size());
         }
 
     }
