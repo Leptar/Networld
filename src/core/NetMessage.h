@@ -43,22 +43,24 @@ namespace networld {
         uint64_t entity_Id = 0;
         Vec3 position{};
         Vec3 rotation{};
-
+        bool is_owner = false;
 
         void serialize(StreamWriter& stream) const {
             stream.write<uint64_t>(entity_Id);
             stream.write_vec3(position);
             stream.write_vec3(rotation);
+            stream.write_bool(is_owner);
         }
 
         static std::optional<SpawnEntityMsg> deserialize(StreamReader& stream) {
             auto entity_id = stream.read<uint64_t>();
             auto pos = stream.read_vec3();
             auto rot = stream.read_vec3();
-            if (!entity_id || !pos || !rot) {
+            auto is_owner = stream.read_bool();
+            if (!entity_id || !pos || !rot || !is_owner) {
                 return std::nullopt;
             }
-            return SpawnEntityMsg{*entity_id, *pos, *rot};
+            return SpawnEntityMsg{*entity_id, *pos, *rot, *is_owner};
         }
     };
     static_assert(NetMessage<SpawnEntityMsg>);

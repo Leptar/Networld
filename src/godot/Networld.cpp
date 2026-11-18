@@ -56,7 +56,8 @@ void NetWorld::_bind_methods() {
 
     ADD_SIGNAL(MethodInfo("entity_spawned",
         PropertyInfo(Variant::INT, "entity_id"),
-        PropertyInfo(Variant::VECTOR3, "position")));
+        PropertyInfo(Variant::VECTOR3, "position"),
+        PropertyInfo(Variant::BOOL, "is_local")));
     ADD_SIGNAL(MethodInfo("entity_despawned",
         PropertyInfo(Variant::INT, "entity_id")));
 }
@@ -153,7 +154,7 @@ void NetWorld::_process(double delta) {
         entity_pos.y = it.position.y;
         entity_pos.z = it.position.z;
 
-        emit_signal("entity_spawned", it.entity_id, entity_pos);
+        emit_signal("entity_spawned", it.entity_id, entity_pos, it.is_local);
     }
 
     for (const auto &it : core_.get_despawned_entities()) {

@@ -3,10 +3,12 @@ extends Node
 var views: Dictionary = {} # entity_id (int) -> MeshInstance3D
 var vbox: VBoxContainer
 var is_client: bool = false
+var camera: Camera3D
+var local_entity_id: int = 0
 
 func _ready() -> void:
 	# 1. Caméra avec rotation statique
-	var camera := Camera3D.new()
+	camera = Camera3D.new()
 	camera.position = Vector3(0, 7, 10)
 	camera.rotation_degrees = Vector3(-35, 0, 0)
 	add_child(camera)
@@ -42,7 +44,7 @@ func _on_client_pressed() -> void:
 	print("[CLIENT] Connecté !")
 	vbox.hide()
 
-func _on_entity_spawned(entity_id: int, pos: Vector3) -> void:
+func _on_entity_spawned(entity_id: int, pos: Vector3, is_local: bool) -> void:
 	if views.has(entity_id):
 		return
 
@@ -50,6 +52,15 @@ func _on_entity_spawned(entity_id: int, pos: Vector3) -> void:
 	cube.mesh = BoxMesh.new()
 	cube.position = pos
 	add_child(cube)
+	
+	if (is_local):
+		local_entity_id = entity_id
+		var mat = StandardMaterial3D.new()
+		mat.albedo_color = Color(0.2, 0.6, 1.0)
+		mat.roughness = 0.4
+		mat.metallic = 0.1
+		cube.material_override = mat
+		camera.reparent(cube, false)
 
 	views[entity_id] = cube
 	Networld.bind_entity_view(entity_id, cube)
@@ -58,11 +69,17 @@ func _on_entity_spawned(entity_id: int, pos: Vector3) -> void:
 func _on_entity_despawned(entity_id: int) -> void:
 	if not views.has(entity_id):
 		return
-
+		
+	if entity_id == local_entity_id:
+		local_entity_id = 0
+		if is_instance_valid(camera) and camera.get_parent():
+			camera.reparent(self, false)
+	
 	var cube: MeshInstance3D = views[entity_id]
 	views.erase(entity_id)
 	if is_instance_valid(cube):
 		cube.queue_free()
+
 	print("[VIEW] Despawn entité ", entity_id)
 
 func _process(_delta: float) -> void:

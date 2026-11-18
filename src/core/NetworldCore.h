@@ -24,6 +24,7 @@ class NetWorldCore {
     NetRegistry registry_;
     std::unique_ptr<INetTransport> transport_;
     bool is_server_ = false;
+    uint64_t local_player_entity_id_ = 0;
 
     Vec3 input_client_;
     std::unordered_map<uint32_t, uint64_t> peer_inputs; // (peer_id -> last_tick_input)
@@ -89,6 +90,7 @@ public:
     void set_client_input(const Vec3& input) { input_client_ = input; }
 
     // lecture des états
+    [[nodiscard]] uint64_t get_local_entity_id() const { return local_player_entity_id_; }
     [[nodiscard]] const std::vector<ViewSyncEntry>& get_view_updates() const { return view_updates_; }
     [[nodiscard]] const std::vector<EntitySpawnEntry>& get_spawned_entities() const { return spawned_entities_; }
     [[nodiscard]] const std::vector<uint64_t>& get_despawned_entities() const { return despawned_entities_; }

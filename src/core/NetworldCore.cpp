@@ -77,13 +77,14 @@ namespace networld {
         // send au nouveau joueur ce qui existe deja
         auto query = ecs_.query_builder<const Position3D>().with<Networked>().build();
         query.each([&](flecs::entity e, const Position3D& pos) {
-            SpawnEntityMsg msg{e.id(), pos.value, Vec3{}};
+            const bool is_owner = (e.id() == new_entity_id);
+            SpawnEntityMsg msg{e.id(), pos.value, Vec3{}, is_owner};
             auto bytes = encode_packet(msg);
             transport_->send(peer_id, NetChannel::RELIABLE_EVENTS, bytes.data(), bytes.size());
         });
 
         // broadcast sont arrivé
-        SpawnEntityMsg new_msg{new_entity_id, Vec3{0,5,0}, Vec3{}};
+        SpawnEntityMsg new_msg{new_entity_id, Vec3{0,5,0}, Vec3{}, false};
         auto out = encode_packet(new_msg);
         for (const auto& [other_peer_id, _] : peer_entities_) {
             if (other_peer_id != peer_id) {
@@ -196,6 +197,7 @@ namespace networld {
         input_client_ = Vec3(0, 0, 0);
         current_tick_ = 0;
         last_received_tick_ = 0;
+        local_player_entity_id_ = 0;
         is_server_ = true;
         transport_->open_as_host(port);
 
@@ -230,7 +232,10 @@ namespace networld {
             uint64_t local_id = create_networked_entity(msg.position);
             net_to_local_entities_[msg.entity_Id] = local_id;
 
-            spawned_entities_.push_back({local_id, msg.position});
+            if (msg.is_owner) {
+                local_player_entity_id_ = local_id;
+            }
+            spawned_entities_.push_back({local_id, msg.position, msg.is_owner});
 
             printf("[CLIENT] SpawnEntityMsg server_id=%llu -> local_id=%llu (%.2f, %.2f, %.2f)\n",
                     msg.entity_Id, local_id, msg.position.x, msg.position.y, msg.position.z);
@@ -243,6 +248,9 @@ namespace networld {
 
             despawned_entities_.push_back(it->second);
 
+            if (it->second == local_player_entity_id_) {
+                local_player_entity_id_ = 0;
+            }
             destroy_entity(it->second);
             net_to_local_entities_.erase(it);
         });
@@ -253,6 +261,7 @@ namespace networld {
         input_client_ = Vec3(0, 0, 0);
         current_tick_ = 0;
         last_received_tick_ = 0;
+        local_player_entity_id_ = 0;
         is_server_ = false;
         transport_->open_as_client(host_ip, port);
 

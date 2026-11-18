@@ -48,6 +48,7 @@ namespace networld {
     struct EntitySpawnEntry {
         uint64_t entity_id = 0;
         Vec3 position;
+        bool is_local = false;
     };
 
 } // namespace networld
