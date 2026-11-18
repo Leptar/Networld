@@ -6,13 +6,13 @@ Bienvenue dans le dossier **Devlog** de **Networld**. Ce dossier te permet de ga
 
 ## 📌 Point de Reprise Rapide (À mettre à jour en fin de session)
 
-- **Dernière mise à jour :** `2026-11-16` (Branche `network-logic`, Commit `fa09e14` — *UPDATE Networld*)
-- **État actuel :** Définition des messages réseau typés ([NetMessage.h](file:///c:/Users/leoul/Godot/Projects/Networld/src/core/NetMessage.h) : `KnockMsg`, `SpawnEntityMsg`, `DespawnEntityMsg`, `StateSyncMsg`), câblage complet de `PacketDispatcher` et `NetEvent` dans [NetworldCore.cpp](file:///c:/Users/leoul/Godot/Projects/Networld/src/core/NetworldCore.cpp), mapping d'IDs Flecs (`peer_entities_` / `net_to_local_entities_`), et liaison dynamique avec Godot via les signaux `entity_spawned` / `entity_despawned` et `bind_entity_view`. Le spawn et la synchronisation de mouvement fonctionnent entre Host et Client.
+- **Dernière mise à jour :** `2026-11-17` (Branche `network-logic`, Commit `c6e3a33` — *UPDATE Networld packet*)
+- **État actuel :** Keepalive UDP client (`KnockMsg` toutes les 60 frames) stabilisant le despawn multi-clients, nettoyage technique effectué (`= 0` par défaut dans [NetMessage.h](file:///c:/Users/leoul/Godot/Projects/Networld/src/core/NetMessage.h), encapsulation de `spawned_entities_` / `despawned_entities_` dans [NetworldCore.h](file:///c:/Users/leoul/Godot/Projects/Networld/src/core/NetworldCore.h), garde `ERR_FAIL_NULL_MSG` dans `bind_entity_view`), et premiers inputs joueur autoritaires (`InputMsg`, `set_client_input`, `Input.get_vector` dans [test_networld.gd](file:///c:/Users/leoul/Godot/Projects/Networld/demo/test_networld.gd)) fonctionnels entre Host et Clients.
 - **À faire immédiatement à la reprise :**
-  1. [ ] Ajouter un keepalive (`KnockMsg`) côté client dans la branche `else` de l'egress de `NetWorldCore::step()` (ex. `if (current_tick_ % 60 == 0)`) pour éviter le `PEER_TIMEOUT` (`5000 ms`) dans `GodotUdpTransport` et permettre la réception de `DespawnEntityMsg` par les clients actifs.
-  2. [ ] Recompiler et tester avec 1 Host + 1 ou 2 Clients pour valider la persistance et la propagation du despawn.
-  3. [ ] Nettoyer les derniers détails (`= 0` sur `DespawnEntityMsg::entity_Id` et `StateSyncMsg::tick`, code commenté dans `step()`, getters `const` pour `spawned_entities_` / `despawned_entities_`, `TODO` dans `bind_entity_view`).
-  4. [ ] Mettre en place l'envoi d'inputs / contrôle de l'entité joueur côté client.
+  1. [ ] Identifier l'entité locale du joueur côté client (`local_entity_id` / flag de propriété) pour pouvoir y attacher la caméra ou différencier visuellement son cube.
+  2. [ ] Séparer progressivement les rôles Serveur et Client sous `NetWorldCore` avant d'ajouter des systèmes Flecs divergents.
+  3. [ ] Mettre en place l'interpolation visuelle côté client entre deux `StateSyncMsg` (puis prédiction/réconciliation si besoin).
+  4. [ ] Ajouter la synchronisation de rotation (`SpawnEntityMsg::rotation`) et sortir la vitesse serveur (`5.0f`) en constante/composant propre.
 
 ---
 
@@ -24,6 +24,7 @@ Bienvenue dans le dossier **Devlog** de **Networld**. Ce dossier te permet de ga
 | **[01_2026-11-13_transport_multi_clients.md](file:///c:/Users/leoul/Godot/Projects/Networld/devlog/01_2026-11-13_transport_multi_clients.md)** | **Session #01 (13 Nov 2026)** : Transport UDP multi-clients par `peer_id`, broadcast, timeouts et événements `NetEvent` sur `network-logic`. |
 | **[02_2026-11-14_stream_et_packet_dispatcher.md](file:///c:/Users/leoul/Godot/Projects/Networld/devlog/02_2026-11-14_stream_et_packet_dispatcher.md)** | **Session #02 (14 Nov 2026)** : Migration C++20 (`SConstruct`), concepts (`NetStream.h`), `StreamWriter`/`StreamReader` et `PacketDispatcher`. |
 | **[03_2026-11-16_netmessage_et_sync_entites.md](file:///c:/Users/leoul/Godot/Projects/Networld/devlog/03_2026-11-16_netmessage_et_sync_entites.md)** | **Session #03 (16 Nov 2026)** : Messages `NetMessage.h`, câblage `PacketDispatcher`/`NetEvent` dans `NetWorldCore`, mapping d'IDs Flecs et signaux Godot (`entity_spawned`/`entity_despawned`). |
+| **[04_2026-11-17_keepalive_nettoyage_et_inputs.md](file:///c:/Users/leoul/Godot/Projects/Networld/devlog/04_2026-11-17_keepalive_nettoyage_et_inputs.md)** | **Session #04 (17 Nov 2026)** : Keepalive UDP (`KnockMsg`), nettoyage technique `Core`/`Godot`, et inputs joueur autoritaires (`InputMsg`) jusqu'à GDScript. |
 | **[TEMPLATE_DEVLOG.md](file:///c:/Users/leoul/Godot/Projects/Networld/devlog/TEMPLATE_DEVLOG.md)** | **Modèle de session** à copier-coller à chaque nouvelle session de code (`01_YYYY-MM-DD_sujet.md`, `02_...`). |
 
 ---
@@ -36,7 +37,8 @@ Bienvenue dans le dossier **Devlog** de **Networld**. Ce dossier te permet de ga
 | **[#01](file:///c:/Users/leoul/Godot/Projects/Networld/devlog/01_2026-11-13_transport_multi_clients.md)** | `2026-11-13` | `3h 30m` | Transport UDP multi-clients (`peer_id`, broadcast, timeout, `NetEvent`) sur `network-logic` | 🟡 En cours (dispatcher / sync / spawn à faire) |
 | **[#02](file:///c:/Users/leoul/Godot/Projects/Networld/devlog/02_2026-11-14_stream_et_packet_dispatcher.md)** | `2026-11-14` | `7h 47m` | Migration C++20, `NetStream` (concepts), `StreamWriter`/`StreamReader` et `PacketDispatcher` | 🟡 En cours (câblage dans `NetWorldCore` à faire) |
 | **[#03](file:///c:/Users/leoul/Godot/Projects/Networld/devlog/03_2026-11-16_netmessage_et_sync_entites.md)** | `2026-11-16` | `4h 07m` | `NetMessage.h`, routage `PacketDispatcher` & `NetEvent` dans `NetWorldCore`, mapping d'IDs Flecs et signaux Godot | 🟡 En cours (keepalive client / despawn à stabiliser) |
-| *#04* | *À venir* | *—* | *Copier `TEMPLATE_DEVLOG.md` vers `04_YYYY-MM-DD_titre.md`* | *—* |
+| **[#04](file:///c:/Users/leoul/Godot/Projects/Networld/devlog/04_2026-11-17_keepalive_nettoyage_et_inputs.md)** | `2026-11-17` | `5h 24m` | Keepalive UDP, nettoyage Core/Godot, et inputs joueur autoritaires (`InputMsg`) jusqu'à GDScript | 🟢 Terminé (commit `c6e3a33`) |
+| *#05* | *À venir* | *—* | *Copier `TEMPLATE_DEVLOG.md` vers `05_YYYY-MM-DD_titre.md`* | *—* |
 
 ---
 
