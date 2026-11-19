@@ -52,6 +52,15 @@ func _on_entity_spawned(entity_id: int, pos: Vector3, is_local: bool) -> void:
 	cube.mesh = BoxMesh.new()
 	cube.position = pos
 	add_child(cube)
+	var nose := MeshInstance3D.new()
+	var nose_mesh := BoxMesh.new()
+	nose_mesh.size = Vector3(0.3, 0.3, 0.4)
+	nose.mesh = nose_mesh
+	nose.position = Vector3(0, 0, 0.6)
+	var nose_mat := StandardMaterial3D.new()
+	nose_mat.albedo_color = Color(1.0, 0.3, 0.2)
+	nose.material_override = nose_mat
+	cube.add_child(nose)
 	
 	if (is_local):
 		local_entity_id = entity_id
@@ -60,7 +69,8 @@ func _on_entity_spawned(entity_id: int, pos: Vector3, is_local: bool) -> void:
 		mat.roughness = 0.4
 		mat.metallic = 0.1
 		cube.material_override = mat
-		camera.reparent(cube, false)
+		
+	
 
 	views[entity_id] = cube
 	Networld.bind_entity_view(entity_id, cube)
@@ -72,8 +82,6 @@ func _on_entity_despawned(entity_id: int) -> void:
 		
 	if entity_id == local_entity_id:
 		local_entity_id = 0
-		if is_instance_valid(camera) and camera.get_parent():
-			camera.reparent(self, false)
 	
 	var cube: MeshInstance3D = views[entity_id]
 	views.erase(entity_id)
@@ -88,3 +96,6 @@ func _process(_delta: float) -> void:
 	
 	var dir: Vector2 = Input.get_vector("ui_left", "ui_right", "ui_up", "ui_down")
 	Networld.set_client_input(Vector3(dir.x, 0.0, dir.y))
+	
+	if local_entity_id != 0 and views.has(local_entity_id):
+		camera.position = views[local_entity_id].position + Vector3(0, 7, 10)

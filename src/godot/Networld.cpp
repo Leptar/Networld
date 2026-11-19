@@ -58,6 +58,7 @@ void NetWorld::_bind_methods() {
     ADD_SIGNAL(MethodInfo("entity_spawned",
         PropertyInfo(Variant::INT, "entity_id"),
         PropertyInfo(Variant::VECTOR3, "position"),
+        PropertyInfo(Variant::QUATERNION, "rotation"),
         PropertyInfo(Variant::BOOL, "is_local")));
     ADD_SIGNAL(MethodInfo("entity_despawned",
         PropertyInfo(Variant::INT, "entity_id")));
@@ -169,6 +170,7 @@ void NetWorld::_process(double delta) {
         auto* node = cast_to<Node3D>(obj);
         if (node) {
             node->set_global_position(Vector3(update.position.x, update.position.y, update.position.z));
+            node->set_global_basis(Basis(Quaternion(update.rotation.x, update.rotation.y, update.rotation.z, update.rotation.w)));
         }
     }
 
