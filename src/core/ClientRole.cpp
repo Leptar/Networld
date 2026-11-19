@@ -45,7 +45,7 @@ namespace networld {
                 fflush(stdout);*/
             }
 
-            core.get_ecs().each([](const Position3D& pos, InterpolationState& interp) {
+            core.get_ecs().each([](const Position3D& pos, const Rotation3D& rot, InterpolationState& interp) {
                 Vec3 diff = pos.value - interp.visual_pos;
                 float norm = diff.x * diff.x + diff.y * diff.y + diff.z * diff.z;
 
@@ -53,9 +53,14 @@ namespace networld {
                     interp.prev_pos = pos.value;
                     interp.target_pos = pos.value;
                     interp.visual_pos = pos.value;
+                    interp.prev_rot = rot.value;
+                    interp.target_rot = rot.value;
+                    interp.visual_rot = rot.value;
                 } else {
                     interp.prev_pos = interp.visual_pos;
                     interp.target_pos = pos.value;
+                    interp.prev_rot = interp.visual_rot;
+                    interp.target_rot = rot.value;
                 }
                 interp.elapsed = 0.0f;
                 interp.duration = NET_SYNC_INTERVAL;
@@ -68,9 +73,8 @@ namespace networld {
             uint64_t local_id = core.create_networked_entity(msg.position);
             net_to_local_entities_[msg.entity_Id] = local_id;
             core.get_ecs().entity(local_id).set<InterpolationState>({
-                msg.position,
-                msg.position,
-                msg.position,
+                msg.position, msg.position, msg.position,
+                msg.rotation, msg.rotation, msg.rotation,
                 0.f,
                 NET_SYNC_INTERVAL
             });
@@ -78,7 +82,7 @@ namespace networld {
             if (msg.is_owner) {
                 local_player_entity_id_ = local_id;
             }
-            core.push_spawned_entity({local_id, msg.position, msg.is_owner});
+            core.push_spawned_entity({local_id, msg.position, msg.is_owner, msg.rotation});
 
             printf("[CLIENT] SpawnEntityMsg server_id=%llu -> local_id=%llu (%.2f, %.2f, %.2f)\n",
                     msg.entity_Id, local_id, msg.position.x, msg.position.y, msg.position.z);

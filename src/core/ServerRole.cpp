@@ -76,11 +76,15 @@ namespace networld {
 
             uint64_t entity_id = it->second;
             core.set_entity_velocity(entity_id, dir_input * PLAYER_MOVE_SPEED);
+            if (norme > 0.001f) {
+                float yaw = std::atan2(dir_input.x, dir_input.z);
+                core.set_entity_rotation(entity_id, Quat::from_yaw(yaw));
+            }
         });
 
         // build query
         sync_query_ = core.get_ecs()
-            .query_builder<Position3D, Velocity3D>()
+            .query_builder<Position3D, Rotation3D, Velocity3D>()
             .with<Networked>()
             .cached()
             .build();
@@ -89,6 +93,7 @@ namespace networld {
         auto server_player = core.get_ecs().entity("ServerPlayer")
            .set<Position3D>({Vec3(0, 5, 0)})
            .set<Velocity3D>({Vec3(1, 0, 0)})
+           .set<Rotation3D>({Quat{}})
            .add<Networked>();
 
         server_player_entity_id_ = server_player.id();
@@ -135,10 +140,10 @@ namespace networld {
         core.push_spawned_entity({new_entity_id, Vec3{0, 5, 0}});
 
         // send au nouveau joueur ce qui existe deja
-        auto query = core.get_ecs().query_builder<const Position3D>().with<Networked>().build();
-        query.each([&](flecs::entity e, const Position3D& pos) {
+        auto query = core.get_ecs().query_builder<const Position3D, const Rotation3D>().with<Networked>().build();
+        query.each([&](flecs::entity e, const Position3D& pos, const Rotation3D& rot) {
             const bool is_owner = (e.id() == new_entity_id);
-            const SpawnEntityMsg msg{e.id(), pos.value, Quat{}, is_owner};
+            const SpawnEntityMsg msg{e.id(), pos.value, rot.value, is_owner};
             auto bytes = encode_packet(msg);
             core.get_transport()->send(peer_id, NetChannel::RELIABLE_EVENTS, bytes.data(), bytes.size());
         });

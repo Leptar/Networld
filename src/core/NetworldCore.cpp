@@ -24,12 +24,20 @@ namespace networld {
         registry_.register_component(ecs_.component<Position3D>().id(), 10);
         registry_.register_component(ecs_.component<Velocity3D>().id(), 11);
         registry_.register_component(ecs_.component<Networked>(), 12);
+        registry_.register_component(ecs_.component<Rotation3D>().id(), 13);
 
         ecs_.component<Vec3>()
                 .member<float>("x")
                 .member<float>("y")
                 .member<float>("z");
 
+        ecs_.component<Quat>()
+            .member<float>("x")
+            .member<float>("y")
+            .member<float>("z")
+            .member<float>("w");
+
+        ecs_.component<Rotation3D>().member<Quat>("value");
         ecs_.component<Position3D>().member<Vec3>("value");
         ecs_.component<Velocity3D>().member<Vec3>("value");
         ecs_.component<Gravity>().member<Vec3>("force");
@@ -48,12 +56,12 @@ namespace networld {
             });
 
         // Systeme 3 change ducoup
-        ecs_.system<const Position3D, const ExternalView>("CollectViewUpdates")
+        ecs_.system<const Position3D, const Rotation3D, const ExternalView>("CollectViewUpdates")
             .kind(flecs::PostUpdate)
-            .each([this](flecs::entity e, const Position3D& p, const ExternalView& v) {
+            .each([this](flecs::entity e, const Position3D& p, const Rotation3D& r, const ExternalView& v) {
                 if (v.host_handle != 0) {
                     // On enregistre la mise à jour dans le tampon de sortie
-                    view_updates_.push_back({e.id(), v.host_handle, p.value});
+                    view_updates_.push_back({e.id(), v.host_handle, p.value, r.value});
                 }
             });
 
@@ -62,10 +70,11 @@ namespace networld {
             .kind(flecs::OnUpdate)
             .each([](flecs::iter& it, size_t /*index*/, InterpolationState& interp) {
                 interp.elapsed += it.delta_time();
-                float t = interp.elapsed > 0.0f ?
+                float t = interp.duration > 0.0f ?
                     std::clamp(interp.elapsed / interp.duration, 0.0f, 1.0f)
                     : 1.0f;
                 interp.visual_pos = Vec3::lerp(interp.prev_pos, interp.target_pos, t);
+                interp.visual_rot = Quat::nlerp(interp.prev_rot, interp.target_rot, t);
             }).disable();
 
         // collect view intepolates (un peu pareil que collect view)
@@ -73,7 +82,7 @@ namespace networld {
             .kind(flecs::PostUpdate)
             .each([this](flecs::entity e, const InterpolationState& interp, const ExternalView& v) {
                 if (v.host_handle != 0) {
-                    view_updates_.push_back({e.id(), v.host_handle, interp.visual_pos});
+                    view_updates_.push_back({e.id(), v.host_handle, interp.visual_pos, interp.visual_rot});
                 }
             })
             .disable();
@@ -159,6 +168,7 @@ namespace networld {
         auto e = ecs_.entity(name)
             .set<Position3D>({initial_pos})
             .set<Velocity3D>({{0, 0, 0}})
+            .set<Rotation3D>({Quat{}})
             .add<Networked>();
         if (host_handle != 0) {
             e.set<ExternalView>({host_handle});
@@ -188,6 +198,13 @@ namespace networld {
         flecs::entity e = ecs_.entity(entity_id);
         if (e.is_alive()) {
             e.set<Velocity3D>({vel});
+        }
+    }
+
+    void NetWorldCore::set_entity_rotation(uint64_t entity_id, const Quat &rot) {
+        flecs::entity e = ecs_.entity(entity_id);
+        if (e.is_alive()) {
+            e.set<Rotation3D>({rot.normalized()});
         }
     }
 

@@ -17,7 +17,7 @@ namespace networld {
         NetBatch extract_batch(const NetWorldCore& core, const flecs::iter& it) const;
 
         // pre-Query pour l'Egress réseau
-        flecs::query<Position3D, Velocity3D> sync_query_;
+        flecs::query<Position3D, Rotation3D, Velocity3D> sync_query_;
 
         uint64_t server_player_entity_id_ = 0;
 
