@@ -10,8 +10,10 @@
 #include "NetBatch.h"
 
 namespace networld {
-    class ClientRole : public INetRole {
 
+    constexpr float SNAP_DIST = 100.0f;
+
+    class ClientRole : public INetRole {
         std::unordered_map<uint64_t, uint64_t> net_to_local_entities_; // (server_entity_id -> local_entity_id)
         Vec3 input_client_{};
         uint64_t local_player_entity_id_ = 0;

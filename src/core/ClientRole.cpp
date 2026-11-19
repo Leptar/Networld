@@ -43,6 +43,22 @@ namespace networld {
                 /*printf("[CLIENT] StateSync tick=%u batches=%zu\n", msg.tick, msg.batches.size());
                 fflush(stdout);*/
             }
+
+            core.get_ecs().each([](const Position3D& pos, InterpolationState& interp) {
+                Vec3 diff = pos.value - interp.visual_pos;
+                float norm = diff.x * diff.x + diff.y * diff.y + diff.z * diff.z;
+
+                if (norm > SNAP_DIST) {
+                    interp.prev_pos = pos.value;
+                    interp.target_pos = pos.value;
+                    interp.visual_pos = pos.value;
+                } else {
+                    interp.prev_pos = interp.visual_pos;
+                    interp.target_pos = pos.value;
+                }
+                interp.elapsed = 0.0f;
+                interp.duration = NET_SYNC_INTERVAL;
+            });
         });
 
         packet_dispatcher.register_handler<SpawnEntityMsg>([this, &core](uint32_t , const SpawnEntityMsg& msg) {
@@ -50,6 +66,13 @@ namespace networld {
 
             uint64_t local_id = core.create_networked_entity(msg.position);
             net_to_local_entities_[msg.entity_Id] = local_id;
+            core.get_ecs().entity(local_id).set<InterpolationState>({
+                msg.position,
+                msg.position,
+                msg.position,
+                0.f,
+                NET_SYNC_INTERVAL
+            });
 
             if (msg.is_owner) {
                 local_player_entity_id_ = local_id;

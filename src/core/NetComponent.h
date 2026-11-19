@@ -19,10 +19,15 @@ namespace networld {
         Vec3 operator+(const Vec3& o) const { return {x + o.x, y + o.y, z + o.z}; }
         Vec3 operator*(float s) const { return {x * s, y * s, z * s}; }
         Vec3& operator+=(const Vec3& o) { x += o.x; y += o.y; z += o.z; return *this; }
+        Vec3 operator-(const Vec3& o) const { return {x - o.x, y - o.y, z - o.z}; }
 
         Vec3() = default;
 
         Vec3(float i, float i1, float i2) : x(i), y(i1), z(i2) {}
+
+        static Vec3 lerp(const Vec3& a, const Vec3& b, float t) {
+            return a + (b - a) * t;
+        }
     };
 
     // composants POD de simulation (Sérialisables en SoA par std::memcpy)
@@ -49,6 +54,14 @@ namespace networld {
         uint64_t entity_id = 0;
         Vec3 position;
         bool is_local = false;
+    };
+
+    struct InterpolationState { // Client only
+        Vec3 prev_pos;
+        Vec3 target_pos;
+        Vec3 visual_pos;
+        float elapsed = 0.0f;
+        float duration = 0.05f;
     };
 
 } // namespace networld
