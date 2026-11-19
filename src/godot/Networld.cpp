@@ -148,6 +148,10 @@ uint64_t NetWorld::spawn_local_entity(Vector3 pos, Node3D *visual_node) {
 void NetWorld::_process(double delta) {
     core_.step(static_cast<float>(delta));
 
+    for (const auto &it : core_.get_despawned_entities()) {
+        emit_signal("entity_despawned", it);
+    }
+
     for (const auto &it : core_.get_spawned_entities()) {
         Vector3 entity_pos;
         entity_pos.x = it.position.x;
@@ -155,10 +159,6 @@ void NetWorld::_process(double delta) {
         entity_pos.z = it.position.z;
 
         emit_signal("entity_spawned", it.entity_id, entity_pos, it.is_local);
-    }
-
-    for (const auto &it : core_.get_despawned_entities()) {
-        emit_signal("entity_despawned", it);
     }
 
     for (const auto& update : core_.get_view_updates()) {

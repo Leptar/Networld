@@ -6,108 +6,14 @@
 #include "NetComponent.h"
 #include <cstdio>
 #include <cmath>
+
+#include "ClientRole.h"
 #include "../../thirdparty/flecs/flecs.h"
 #include "NetMessage.h"
+#include "ServerRole.h"
 
 namespace networld {
 
-    NetBatch NetWorldCore::extract_batch(const flecs::iter &it) const {
-        NetBatch batch;
-        const flecs::iter_t* c_it = it.c_ptr();
-        const auto entity_count = static_cast<uint16_t>(c_it->count);
-
-        // Copie des IDs d'entités Flecs vers le vecteur uint64_t neutre
-        batch.entities.resize(entity_count);
-        std::memcpy(batch.entities.data(), c_it->entities, entity_count * sizeof(uint64_t));
-
-        for (int i = 0; i < c_it->field_count; ++i) {
-            flecs::id field_id = it.id(i);
-            const flecs::id_t comp_id = field_id.raw_id();
-
-            const uint16_t net_id = registry_.get_net_id(comp_id);
-            const size_t comp_size = ecs_field_size(c_it, i);
-
-            if (net_id == 0 || comp_size == 0) continue;
-
-            NetColumn col;
-            col.net_id = net_id;
-            col.element_size = static_cast<uint16_t>(comp_size);
-
-            const void* column_data = ecs_field_w_size(c_it, comp_size, i);
-            size_t payload_size = entity_count * comp_size;
-
-            col.payload.resize(payload_size);
-            std::memcpy(col.payload.data(), column_data, payload_size);
-
-            batch.columns.push_back(std::move(col));
-        }
-
-        return batch;
-    }
-
-    void NetWorldCore::apply_batches(const std::vector<NetBatch> &batches) const {
-        for (const NetBatch& batch : batches) {
-            size_t entity_count = batch.entities.size();
-
-            for (const NetColumn& col : batch.columns) {
-                flecs::id_t local_id = registry_.get_local_id(col.net_id);
-                if (local_id == 0 || col.element_size == 0) continue;
-
-                for (size_t i = 0; i < entity_count; ++i) {
-                    auto it = net_to_local_entities_.find(batch.entities[i]);
-                    if (it == net_to_local_entities_.end()) continue;
-                    flecs::entity_t entity_id = it->second;
-                    if (!ecs_.is_alive(entity_id)) continue;
-
-                    const uint8_t* elem_ptr = col.payload.data() + (i * col.element_size);
-                    ecs_set_id(ecs_.c_ptr(), entity_id, local_id, col.element_size, elem_ptr);
-                }
-            }
-        }
-    }
-
-    void NetWorldCore::on_peer_connected(uint32_t peer_id) {
-        if (!is_server_) return;
-
-        // entity du joueur
-        uint64_t new_entity_id = create_networked_entity(Vec3{0,5,0});
-        peer_entities_[peer_id] = new_entity_id;
-        spawned_entities_.push_back({new_entity_id, Vec3{0, 5, 0}});
-
-        // send au nouveau joueur ce qui existe deja
-        auto query = ecs_.query_builder<const Position3D>().with<Networked>().build();
-        query.each([&](flecs::entity e, const Position3D& pos) {
-            const bool is_owner = (e.id() == new_entity_id);
-            SpawnEntityMsg msg{e.id(), pos.value, Vec3{}, is_owner};
-            auto bytes = encode_packet(msg);
-            transport_->send(peer_id, NetChannel::RELIABLE_EVENTS, bytes.data(), bytes.size());
-        });
-
-        // broadcast sont arrivé
-        SpawnEntityMsg new_msg{new_entity_id, Vec3{0,5,0}, Vec3{}, false};
-        auto out = encode_packet(new_msg);
-        for (const auto& [other_peer_id, _] : peer_entities_) {
-            if (other_peer_id != peer_id) {
-                transport_->send(other_peer_id, NetChannel::RELIABLE_EVENTS, out.data(), out.size());
-            }
-        }
-    }
-
-    void NetWorldCore::on_peer_disconnected(uint32_t peer_id) {
-        if (!is_server_) return;
-
-        auto it = peer_entities_.find(peer_id);
-        if (it == peer_entities_.end()) return;
-
-        uint64_t entity_id = it->second;
-        peer_entities_.erase(it);
-        destroy_entity(entity_id);
-        peer_inputs.erase(peer_id);
-        despawned_entities_.push_back(entity_id);
-
-        auto out = encode_packet(DespawnEntityMsg{entity_id});
-        transport_->send(PEER_BROADCAST, NetChannel::RELIABLE_EVENTS, out.data(), out.size());
-    }
 
     void NetWorldCore::bind_entity_view(uint64_t entity_id, uint64_t host_handle) {
         flecs::entity e = ecs_.entity(entity_id);
@@ -154,7 +60,7 @@ namespace networld {
     }
 
     NetWorldCore::~NetWorldCore() {
-        if (transport_) transport_->close();
+        stop();
     }
 
     void NetWorldCore::set_transport(std::unique_ptr<INetTransport> transport) {
@@ -163,115 +69,35 @@ namespace networld {
 
     bool NetWorldCore::start_host(uint16_t port) {
         if (!transport_) return false;
-
+        stop();
         packet_dispatcher_ = PacketDispatcher{};
-        packet_dispatcher_.register_handler<KnockMsg>([](uint32_t /*peer_id*/, const KnockMsg&) {
-            // printf("NetWorldCore::start_host : peer %u ready\n", peer_id);
-        });
-
-        packet_dispatcher_.register_handler<InputMsg>([this](uint32_t peer_id, const InputMsg& input_msg) {
-            auto it = peer_entities_.find(peer_id);
-            if (it == peer_entities_.end()) return;
-
-            auto it_input = peer_inputs.find(peer_id);
-            if ( it_input != peer_inputs.end()
-                && it_input->second >= input_msg.tick_input) return;
-
-            peer_inputs[peer_id] = input_msg.tick_input;
-
-            Vec3 dir_input;
-            float norme = sqrt(input_msg.direction.x*input_msg.direction.x
-                                 + input_msg.direction.z*input_msg.direction.z);
-
-            dir_input.x = norme > 1 ? input_msg.direction.x/norme : input_msg.direction.x;
-            dir_input.y = 0;
-            dir_input.z = norme > 1 ? input_msg.direction.z/norme : input_msg.direction.z;
-
-            uint64_t entity_id = it->second;
-            set_entity_velocity(entity_id, dir_input*5.0f); // TODO faire une constante de velocité je suppose
-        });
-
-        peer_entities_.clear();
-        net_to_local_entities_.clear();
-        peer_inputs.clear();
-        input_client_ = Vec3(0, 0, 0);
         current_tick_ = 0;
-        last_received_tick_ = 0;
-        local_player_entity_id_ = 0;
-        is_server_ = true;
-        transport_->open_as_host(port);
-
-        // Entite serveur de test
-        auto server_player = ecs_.entity("ServerPlayer")
-           .set<Position3D>({Vec3(0, 5, 0)})
-           .set<Velocity3D>({Vec3(1, 0, 0)})
-           .add<Networked>();
-        spawned_entities_.push_back({server_player.id(), Vec3(0, 5, 0)});
+        if (!transport_->open_as_host(port)) return false;
+        role_ = std::make_unique<ServerRole>();
+        role_->on_start(*this);
         return true;
     }
 
     bool NetWorldCore::start_client(const std::string &host_ip, uint16_t port) {
         if (!transport_) return false;
-
+        stop();
         packet_dispatcher_ = PacketDispatcher{};
-
-        packet_dispatcher_.register_handler<StateSyncMsg>([this](uint32_t /*peer_id*/, const StateSyncMsg& msg) {
-            if (msg.tick <= last_received_tick_) return;
-            last_received_tick_ = msg.tick;
-            apply_batches(msg.batches);
-
-            if (msg.tick % 60 == 0 || last_received_tick_ == 0) {
-                /*printf("[CLIENT] StateSync tick=%u batches=%zu\n", msg.tick, msg.batches.size());
-                fflush(stdout);*/
-            }
-        });
-
-        packet_dispatcher_.register_handler<SpawnEntityMsg>([this](uint32_t , const SpawnEntityMsg& msg) {
-            if (net_to_local_entities_.contains(msg.entity_Id)) return;
-
-            uint64_t local_id = create_networked_entity(msg.position);
-            net_to_local_entities_[msg.entity_Id] = local_id;
-
-            if (msg.is_owner) {
-                local_player_entity_id_ = local_id;
-            }
-            spawned_entities_.push_back({local_id, msg.position, msg.is_owner});
-
-            printf("[CLIENT] SpawnEntityMsg server_id=%llu -> local_id=%llu (%.2f, %.2f, %.2f)\n",
-                    msg.entity_Id, local_id, msg.position.x, msg.position.y, msg.position.z);
-            fflush(stdout);
-        });
-
-        packet_dispatcher_.register_handler<DespawnEntityMsg>([this](uint32_t , const DespawnEntityMsg& msg) {
-            auto it = net_to_local_entities_.find(msg.entity_Id);
-            if (it == net_to_local_entities_.end()) return;
-
-            despawned_entities_.push_back(it->second);
-
-            if (it->second == local_player_entity_id_) {
-                local_player_entity_id_ = 0;
-            }
-            destroy_entity(it->second);
-            net_to_local_entities_.erase(it);
-        });
-
-        peer_entities_.clear();
-        net_to_local_entities_.clear();
-        peer_inputs.clear();
-        input_client_ = Vec3(0, 0, 0);
         current_tick_ = 0;
-        last_received_tick_ = 0;
-        local_player_entity_id_ = 0;
-        is_server_ = false;
-        transport_->open_as_client(host_ip, port);
-
-        auto knock = encode_packet(KnockMsg{});
-        transport_->send(PEER_SERVER, NetChannel::RELIABLE_EVENTS, knock.data(), knock.size());
+        if (!transport_->open_as_client(host_ip, port)) return false;
+        role_ = std::make_unique<ClientRole>();
+        role_->on_start(*this);
         return true;
     }
 
     void NetWorldCore::stop() {
-
+        if (role_) {
+            role_->on_stop(*this);
+            packet_dispatcher_ = PacketDispatcher{};
+            role_.reset();
+        }
+        if (transport_) {
+            transport_->close();
+        }
     }
 
     void NetWorldCore::step(float delta_time) {
@@ -284,10 +110,10 @@ namespace networld {
             // je check les events du packet pour voir comment traiter le packet
             switch (pkt.event) {
                 case NetEvent::CONNECTED :
-                    on_peer_connected(pkt.sender_peer_id);
+                    if (role_) role_->on_peer_connected(*this, pkt.sender_peer_id);
                     break;
                 case NetEvent::DISCONNECTED :
-                    on_peer_disconnected(pkt.sender_peer_id);
+                    if (role_) role_->on_peer_disconnected(*this,pkt.sender_peer_id);
                     break;
                 case NetEvent::DATA :
                     if (!packet_dispatcher_.dispatch(pkt.sender_peer_id, pkt.payload)) {
@@ -306,37 +132,7 @@ namespace networld {
         ecs_.progress(delta_time);
 
         // EGRESS : Extraction NetWorld -> Sérialisation pure -> Réseau
-        if (is_server_) {
-            // broadcast le sync state msg pour les autres clients
-            StateSyncMsg sync_msg;
-            sync_msg.tick = current_tick_;
-
-            auto query = ecs_.query_builder<Position3D, Velocity3D>().with<Networked>().build();
-            query.run([&](flecs::iter& it) {
-                while (it.next()) {
-                    NetBatch batch = extract_batch(it);
-                    if (!batch.entities.empty()) {
-                        sync_msg.batches.push_back(std::move(batch));
-                    }
-                }
-            });
-
-            if (!sync_msg.batches.empty()) {
-                std::vector<uint8_t> out = encode_packet(sync_msg);
-                transport_->send(PEER_BROADCAST, NetChannel::UNRELIABLE_STATE, out.data(), out.size());
-            }
-        } else {
-            if (current_tick_ % 60 == 0){
-                auto knock_pkt = encode_packet(KnockMsg{});
-                transport_->send(PEER_SERVER, NetChannel::UNRELIABLE_STATE, knock_pkt.data(), knock_pkt.size());
-            }
-
-            InputMsg input_msg;
-            input_msg.tick_input = current_tick_;
-            input_msg.direction = input_client_;
-            auto input_pkt = encode_packet(input_msg);
-            transport_->send(PEER_SERVER, NetChannel::UNRELIABLE_STATE, input_pkt.data(), input_pkt.size());
-        }
+        if (role_) role_->on_egress(*this);
     }
 
     uint64_t NetWorldCore::create_networked_entity(const Vec3 &initial_pos, uint64_t host_handle, const char *name) {
@@ -373,5 +169,16 @@ namespace networld {
         if (e.is_alive()) {
             e.set<Velocity3D>({vel});
         }
+    }
+
+    void NetWorldCore::set_simulation_systems_enabled(bool enabled) {
+        if (enabled) {
+            ecs_.lookup("ApplyGravity").enable();
+            ecs_.lookup("ApplyMovement").enable();
+        } else {
+            ecs_.lookup("ApplyGravity").disable();
+            ecs_.lookup("ApplyMovement").disable();
+        }
+
     }
 } // networld

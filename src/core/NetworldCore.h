@@ -12,6 +12,7 @@
 #include "flecs.h"
 #include "NetComponent.h"
 #include "NetRegistry.h"
+#include "INetRole.h"
 #include "NetBatch.h"
 #include "INetTransport.h"
 #include "PacketDispatcher.h"
@@ -23,36 +24,18 @@ class NetWorldCore {
     flecs::world ecs_;
     NetRegistry registry_;
     std::unique_ptr<INetTransport> transport_;
-    bool is_server_ = false;
-    uint64_t local_player_entity_id_ = 0;
-
-    Vec3 input_client_;
-    std::unordered_map<uint32_t, uint64_t> peer_inputs; // (peer_id -> last_tick_input)
+    std::unique_ptr<INetRole> role_;
 
     std::vector<EntitySpawnEntry> spawned_entities_;
     std::vector<uint64_t> despawned_entities_;
 
-    std::unordered_map<uint64_t, uint64_t> net_to_local_entities_; // (server_entity_id -> local_entity_id)
-    std::unordered_map<uint32_t, uint64_t> peer_entities_; // (peer_id -> server_entity_id)
-
     // tick for message
     uint32_t current_tick_ = 0;
-    uint32_t last_received_tick_ = 0;
     PacketDispatcher packet_dispatcher_;
 
     // output stamp contenant les transformations à appliquer aux nœuds visuels du moteur
     std::vector<ViewSyncEntry> view_updates_;
 
-    // pre-Query pour l'Egress réseau
-    flecs::query<Position3D, Velocity3D> net_query_;
-
-    // traduction Flecs <-> NetBatch
-    NetBatch extract_batch(const flecs::iter& it) const;
-    void apply_batches(const std::vector<NetBatch>& batches) const;
-
-    // call in switch
-    void on_peer_connected(uint32_t peer_id);
-    void on_peer_disconnected(uint32_t peer_id);
 
 public:
     NetWorldCore();
@@ -84,16 +67,25 @@ public:
     uint64_t find_entity(const char* name) const;
 
     void bind_entity_view(uint64_t entity_id, uint64_t host_handle);
+
     void set_entity_position(uint64_t entity_id, const Vec3& pos);
     void set_entity_velocity(uint64_t entity_id, const Vec3& vel);
-
-    void set_client_input(const Vec3& input) { input_client_ = input; }
+    void set_simulation_systems_enabled(bool enabled);
+    void set_client_input(const Vec3& input) { if (role_) role_->set_client_input(input); }
 
     // lecture des états
-    [[nodiscard]] uint64_t get_local_entity_id() const { return local_player_entity_id_; }
+    [[nodiscard]] uint64_t get_local_entity_id() const { return role_ ? role_->get_local_entity_id() : 0; }
     [[nodiscard]] const std::vector<ViewSyncEntry>& get_view_updates() const { return view_updates_; }
     [[nodiscard]] const std::vector<EntitySpawnEntry>& get_spawned_entities() const { return spawned_entities_; }
     [[nodiscard]] const std::vector<uint64_t>& get_despawned_entities() const { return despawned_entities_; }
+    INetTransport* get_transport() const { return transport_.get(); }
+    PacketDispatcher& get_dispatcher() { return packet_dispatcher_; }
+    const NetRegistry& get_registry() const { return registry_; }
+    uint32_t get_current_tick() const { return current_tick_; }
+
+    void push_spawned_entity(const EntitySpawnEntry& entry) {spawned_entities_.push_back(entry);}
+    void push_despawned_entity(uint64_t entity_id) { despawned_entities_.push_back(entity_id); }
+
     void clear_despawned_entities() { despawned_entities_.clear(); }
     void clear_spawned_entities() { spawned_entities_.clear(); }
 
