@@ -12,7 +12,7 @@ namespace networld {
 
     class NetWorldCore;
 
-    inline constexpr float NET_SYNC_INTERVAL = 0.2f;
+    inline constexpr float NET_SYNC_INTERVAL = 1.0f / 20.0f;
 
     // va me permettre de séparer les deux networld (client/server)
     class INetRole {
