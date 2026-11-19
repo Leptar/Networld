@@ -138,13 +138,13 @@ namespace networld {
         auto query = core.get_ecs().query_builder<const Position3D>().with<Networked>().build();
         query.each([&](flecs::entity e, const Position3D& pos) {
             const bool is_owner = (e.id() == new_entity_id);
-            const SpawnEntityMsg msg{e.id(), pos.value, Vec3{}, is_owner};
+            const SpawnEntityMsg msg{e.id(), pos.value, Quat{}, is_owner};
             auto bytes = encode_packet(msg);
             core.get_transport()->send(peer_id, NetChannel::RELIABLE_EVENTS, bytes.data(), bytes.size());
         });
 
         // broadcast sont arrivé
-        const SpawnEntityMsg new_msg{new_entity_id, Vec3{0,5,0}, Vec3{}, false};
+        const SpawnEntityMsg new_msg{new_entity_id, Vec3{0,5,0}, Quat{}, false};
         auto out = encode_packet(new_msg);
         for (const auto &other_peer_id: peer_entities_ | std::views::keys) {
             if (other_peer_id != peer_id) {

@@ -24,6 +24,13 @@ namespace networld {
         write_float(value.z);
     }
 
+    void StreamWriter::write_quat(const Quat &value) {
+        write_float(value.x);
+        write_float(value.y);
+        write_float(value.z);
+        write_float(value.w);
+    }
+
     void StreamWriter::write_raw_bytes(std::span<const uint8_t> bytes) {
         _buffer.insert(_buffer.end(), bytes.begin(), bytes.end());
     }

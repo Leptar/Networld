@@ -34,6 +34,7 @@ namespace networld {
         std::optional<bool> read_bool();
         std::optional<float> read_float();
         std::optional<Vec3> read_vec3();
+        std::optional<Quat> read_quat();
 
         template <NetEnum T>
         std::optional<T> read_enum() {

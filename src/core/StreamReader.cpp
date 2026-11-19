@@ -28,6 +28,15 @@ namespace networld {
         return Vec3{*x, *y, *z};
     }
 
+    std::optional<Quat> StreamReader::read_quat() {
+        auto x = read_float();
+        auto y = read_float();
+        auto z = read_float();
+        auto w = read_float();
+        if (!x || !y || !z || !w) return std::nullopt;
+        return Quat{*x, *y, *z, *w};
+    }
+
     std::optional<std::span<const uint8_t>> StreamReader::read_raw_bytes(size_t count) {
         if (_cursor.size() < count) {
             return std::nullopt;

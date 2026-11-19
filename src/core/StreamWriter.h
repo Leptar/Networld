@@ -26,6 +26,7 @@ namespace networld {
         void write_bool(bool value);
         void write_float(float value);
         void write_vec3(const Vec3& value);
+        void write_quat(const Quat& value);
 
         template <NetEnum T>
         void write_enum(T value) {
