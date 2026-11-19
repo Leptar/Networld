@@ -31,6 +31,7 @@ namespace networld {
 
     void ClientRole::on_start(NetWorldCore &core) {
         core.set_simulation_systems_enabled(false);
+        core.set_interpolation_systems_enabled(true);
 
         PacketDispatcher& packet_dispatcher = core.get_dispatcher();
 

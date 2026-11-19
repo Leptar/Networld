@@ -53,6 +53,7 @@ void NetWorld::_bind_methods() {
         D_METHOD("bind_entity_view", "id", "visual_node"),
         &NetWorld::bind_entity_view);
     ClassDB::bind_method(D_METHOD("set_client_input", "input"), &NetWorld::set_client_input);
+    ClassDB::bind_method(D_METHOD("get_local_entity_id"), &NetWorld::get_local_entity_id);
 
     ADD_SIGNAL(MethodInfo("entity_spawned",
         PropertyInfo(Variant::INT, "entity_id"),
@@ -128,6 +129,7 @@ NetWorld::~NetWorld() {
 void NetWorld::host(int port) {
     core_.clear_despawned_entities();
     core_.clear_spawned_entities();
+    core_.stop();
     core_.set_transport(create_transport());
     core_.start_host(port);
 }
@@ -135,6 +137,7 @@ void NetWorld::host(int port) {
 void NetWorld::join(String ip, int port) {
     core_.clear_despawned_entities();
     core_.clear_spawned_entities();
+    core_.stop();
     core_.set_transport(create_transport());
     core_.start_client(ip.utf8().get_data(), port);
 }

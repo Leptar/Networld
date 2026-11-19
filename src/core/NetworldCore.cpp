@@ -5,11 +5,9 @@
 #include "NetworldCore.h"
 #include "NetComponent.h"
 #include <cstdio>
-#include <cmath>
-
+#include <algorithm>
 #include "ClientRole.h"
 #include "../../thirdparty/flecs/flecs.h"
-#include "NetMessage.h"
 #include "ServerRole.h"
 
 namespace networld {
@@ -51,12 +49,34 @@ namespace networld {
 
         // Systeme 3 change ducoup
         ecs_.system<const Position3D, const ExternalView>("CollectViewUpdates")
+            .kind(flecs::PostUpdate)
             .each([this](flecs::entity e, const Position3D& p, const ExternalView& v) {
                 if (v.host_handle != 0) {
                     // On enregistre la mise à jour dans le tampon de sortie
                     view_updates_.push_back({e.id(), v.host_handle, p.value});
                 }
             });
+
+        // step pour l'interpolation (disable par defaut)
+        ecs_.system<InterpolationState>("InterpolateViews")
+            .kind(flecs::OnUpdate)
+            .each([](flecs::iter& it, size_t /*index*/, InterpolationState& interp) {
+                interp.elapsed += it.delta_time();
+                float t = interp.elapsed > 0.0f ?
+                    std::clamp(interp.elapsed / interp.duration, 0.0f, 1.0f)
+                    : 1.0f;
+                interp.visual_pos = Vec3::lerp(interp.prev_pos, interp.target_pos, t);
+            }).disable();
+
+        // collect view intepolates (un peu pareil que collect view)
+        ecs_.system<const InterpolationState, const ExternalView>("CollectInterpolatedViewUpdates")
+            .kind(flecs::PostUpdate)
+            .each([this](flecs::entity e, const InterpolationState& interp, const ExternalView& v) {
+                if (v.host_handle != 0) {
+                    view_updates_.push_back({e.id(), v.host_handle, interp.visual_pos});
+                }
+            })
+            .disable();
     }
 
     NetWorldCore::~NetWorldCore() {
@@ -172,13 +192,25 @@ namespace networld {
     }
 
     void NetWorldCore::set_simulation_systems_enabled(bool enabled) {
-        if (enabled) {
-            ecs_.lookup("ApplyGravity").enable();
-            ecs_.lookup("ApplyMovement").enable();
-        } else {
-            ecs_.lookup("ApplyGravity").disable();
-            ecs_.lookup("ApplyMovement").disable();
-        }
+        set_system_enabled("ApplyGravity", enabled);
+        set_system_enabled("ApplyMovement", enabled);
+        set_system_enabled("CollectViewUpdates", enabled);
+    }
 
+    void NetWorldCore::set_interpolation_systems_enabled(bool enabled) {
+        set_system_enabled("InterpolateViews", enabled);
+        set_system_enabled("CollectInterpolatedViewUpdates", enabled);
+    }
+
+    bool NetWorldCore::set_system_enabled(const char *name, bool enabled) {
+        flecs::entity sys = ecs_.lookup(name);
+        if (!sys.is_alive()) return false;
+
+        if (enabled) {
+            sys.enable();
+        } else {
+            sys.disable();
+        }
+        return true;
     }
 } // networld

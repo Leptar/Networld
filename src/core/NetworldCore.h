@@ -7,7 +7,6 @@
 #pragma once
 #include <memory>
 #include <string>
-#include <unordered_map>
 #include <vector>
 #include "flecs.h"
 #include "NetComponent.h"
@@ -71,7 +70,9 @@ public:
     void set_entity_position(uint64_t entity_id, const Vec3& pos);
     void set_entity_velocity(uint64_t entity_id, const Vec3& vel);
     void set_simulation_systems_enabled(bool enabled);
+    void set_interpolation_systems_enabled(bool enabled);
     void set_client_input(const Vec3& input) { if (role_) role_->set_client_input(input); }
+    bool set_system_enabled(const char* name, bool enabled);
 
     // lecture des états
     [[nodiscard]] uint64_t get_local_entity_id() const { return role_ ? role_->get_local_entity_id() : 0; }

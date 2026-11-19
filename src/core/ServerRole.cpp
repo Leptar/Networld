@@ -47,6 +47,7 @@ namespace networld {
 
     void ServerRole::on_start(NetWorldCore &core) {
         core.set_simulation_systems_enabled(true);
+        core.set_interpolation_systems_enabled(false);
 
         PacketDispatcher& packet_dispatcher = core.get_dispatcher();
         packet_dispatcher.register_handler<KnockMsg>([](uint32_t /*peer_id*/, const KnockMsg&) {
