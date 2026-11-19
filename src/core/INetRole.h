@@ -12,6 +12,8 @@ namespace networld {
 
     class NetWorldCore;
 
+    inline constexpr float NET_SYNC_INTERVAL = 0.2f;
+
     // va me permettre de séparer les deux networld (client/server)
     class INetRole {
         public:
@@ -21,7 +23,7 @@ namespace networld {
         virtual void on_stop(NetWorldCore& core) {}
         virtual void on_peer_connected(NetWorldCore& core, uint32_t peer_id) {}
         virtual void on_peer_disconnected(NetWorldCore& core, uint32_t peer_id) {}
-        virtual void on_egress(NetWorldCore& core) = 0;
+        virtual void on_egress(NetWorldCore& core, float delta_time) = 0;
 
         virtual void set_client_input(const Vec3&) {}
         [[nodiscard]] virtual uint64_t get_local_entity_id() const { return 0; }

@@ -22,7 +22,7 @@ namespace networld {
         void on_start(NetWorldCore &core) override;
         void on_stop(NetWorldCore &core) override;
 
-        void on_egress(NetWorldCore &core) override;
+        void on_egress(NetWorldCore &core, float delta_time) override;
         void set_client_input(const Vec3 &) override;
         uint64_t get_local_entity_id() const override;
     };

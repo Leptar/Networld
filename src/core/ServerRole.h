@@ -21,12 +21,15 @@ namespace networld {
 
         uint64_t server_player_entity_id_ = 0;
 
+        static constexpr float PLAYER_MOVE_SPEED = 5.0f;
+        float sync_accumulator_ = 0.0f;
+
     public:
         void on_start(NetWorldCore &core) override;
         void on_stop(NetWorldCore &core) override;
         void on_peer_connected(NetWorldCore &core, uint32_t peer_id) override;
         void on_peer_disconnected(NetWorldCore &core, uint32_t peer_id) override;
-        void on_egress(NetWorldCore &core) override;
+        void on_egress(NetWorldCore &core, float delta_time) override;
     };
 } // networld
 

@@ -3,7 +3,7 @@
 //
 
 #include "ServerRole.h"
-
+#include <cmath>
 #include <ranges>
 
 #include "NetMessage.h"
@@ -63,8 +63,10 @@ namespace networld {
 
             peer_inputs[peer_id] = input_msg.tick_input;
 
+            if (!std::isfinite(input_msg.direction.x) || !std::isfinite(input_msg.direction.z)) return;
+
             Vec3 dir_input;
-            float norme = sqrt(input_msg.direction.x*input_msg.direction.x
+            float norme = std::sqrt(input_msg.direction.x*input_msg.direction.x
                                  + input_msg.direction.z*input_msg.direction.z);
 
             dir_input.x = norme > 1 ? input_msg.direction.x/norme : input_msg.direction.x;
@@ -72,7 +74,7 @@ namespace networld {
             dir_input.z = norme > 1 ? input_msg.direction.z/norme : input_msg.direction.z;
 
             uint64_t entity_id = it->second;
-            core.set_entity_velocity(entity_id, dir_input*5.0f); // TODO faire une constante de velocité je suppose
+            core.set_entity_velocity(entity_id, dir_input * PLAYER_MOVE_SPEED);
         });
 
         // build query
@@ -90,6 +92,7 @@ namespace networld {
 
         server_player_entity_id_ = server_player.id();
         core.push_spawned_entity({server_player.id(), Vec3(0, 5, 0)});
+        sync_accumulator_ = 0.0f;
     }
 
     void ServerRole::on_stop(NetWorldCore &core) {
@@ -105,7 +108,8 @@ namespace networld {
             core.destroy_entity(server_player_entity_id_);
             server_player_entity_id_ = 0;
         }
-        
+
+        sync_accumulator_ = 0.0f;
         // TODO : voir cette version plus tard ptetre (si c'est pertinent)
         /*
          *  std::vector<uint64_t> to_destroy;
@@ -162,8 +166,12 @@ namespace networld {
         core.get_transport()->send(PEER_BROADCAST, NetChannel::RELIABLE_EVENTS, out.data(), out.size());
     }
 
-    void ServerRole::on_egress(NetWorldCore &core) {
+    void ServerRole::on_egress(NetWorldCore &core, float delta_time) {
         if (!sync_query_) return;
+
+        sync_accumulator_ += delta_time;
+        if (sync_accumulator_ < NET_SYNC_INTERVAL) return;
+        sync_accumulator_ = std::fmod(sync_accumulator_, NET_SYNC_INTERVAL);
 
         // broadcast le sync state msg pour les autres clients
         StateSyncMsg sync_msg;

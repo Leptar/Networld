@@ -132,7 +132,7 @@ namespace networld {
         ecs_.progress(delta_time);
 
         // EGRESS : Extraction NetWorld -> Sérialisation pure -> Réseau
-        if (role_) role_->on_egress(*this);
+        if (role_) role_->on_egress(*this, delta_time);
     }
 
     uint64_t NetWorldCore::create_networked_entity(const Vec3 &initial_pos, uint64_t host_handle, const char *name) {

@@ -90,7 +90,7 @@ namespace networld {
         input_client_ = Vec3{};
     }
 
-    void ClientRole::on_egress(NetWorldCore &core) {
+    void ClientRole::on_egress(NetWorldCore &core, float delta_time) {
         if (core.get_current_tick() % 60 == 0){
             auto knock_pkt = encode_packet(KnockMsg{});
             core.get_transport()->send(PEER_SERVER, NetChannel::UNRELIABLE_STATE, knock_pkt.data(), knock_pkt.size());
