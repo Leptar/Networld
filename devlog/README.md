@@ -6,13 +6,13 @@ Bienvenue dans le dossier **Devlog** de **Networld**. Ce dossier te permet de ga
 
 ## 📌 Point de Reprise Rapide (À mettre à jour en fin de session)
 
-- **Dernière mise à jour :** `2026-11-17` (Branche `network-logic`, Commit `c6e3a33` — *UPDATE Networld packet*)
-- **État actuel :** Keepalive UDP client (`KnockMsg` toutes les 60 frames) stabilisant le despawn multi-clients, nettoyage technique effectué (`= 0` par défaut dans [NetMessage.h](file:///c:/Users/leoul/Godot/Projects/Networld/src/core/NetMessage.h), encapsulation de `spawned_entities_` / `despawned_entities_` dans [NetworldCore.h](file:///c:/Users/leoul/Godot/Projects/Networld/src/core/NetworldCore.h), garde `ERR_FAIL_NULL_MSG` dans `bind_entity_view`), et premiers inputs joueur autoritaires (`InputMsg`, `set_client_input`, `Input.get_vector` dans [test_networld.gd](file:///c:/Users/leoul/Godot/Projects/Networld/demo/test_networld.gd)) fonctionnels entre Host et Clients.
+- **Dernière mise à jour :** `2026-11-18` (Branche `network-logic`, Commit `786fdd2` — *UPDATE NetworldCore*)
+- **État actuel :** Propriété locale du joueur implémentée de bout en bout (`SpawnEntityMsg::is_owner`, `EntitySpawnEntry::is_local`, signal `entity_spawned(id, pos, is_local)`, coloration du cube local et suivi caméra sécurisé dans [test_networld.gd](file:///c:/Users/leoul/Godot/Projects/Networld/demo/test_networld.gd)), et séparation complète des rôles Serveur/Client via [INetRole.h](file:///c:/Users/leoul/Godot/Projects/Networld/src/core/INetRole.h), [ServerRole.cpp](file:///c:/Users/leoul/Godot/Projects/Networld/src/core/ServerRole.cpp) et [ClientRole.cpp](file:///c:/Users/leoul/Godot/Projects/Networld/src/core/ClientRole.cpp) avec désactivation des systèmes de simulation Flecs côté client (`set_simulation_systems_enabled(false)`).
 - **À faire immédiatement à la reprise :**
-  1. [ ] Identifier l'entité locale du joueur côté client (`local_entity_id` / flag de propriété) pour pouvoir y attacher la caméra ou différencier visuellement son cube.
-  2. [ ] Séparer progressivement les rôles Serveur et Client sous `NetWorldCore` avant d'ajouter des systèmes Flecs divergents.
-  3. [ ] Mettre en place l'interpolation visuelle côté client entre deux `StateSyncMsg` (puis prédiction/réconciliation si besoin).
-  4. [ ] Ajouter la synchronisation de rotation (`SpawnEntityMsg::rotation`) et sortir la vitesse serveur (`5.0f`) en constante/composant propre.
+  1. [ ] Mettre en place l'interpolation visuelle côté client (`ClientRole`) entre deux `StateSyncMsg` (puis prédiction/réconciliation si besoin).
+  2. [ ] Mini-nettoyage post-split : ajouter `#include <cmath>` dans [ServerRole.cpp](file:///c:/Users/leoul/Godot/Projects/Networld/src/core/ServerRole.cpp), retirer les includes inutilisés de [NetworldCore.h](file:///c:/Users/leoul/Godot/Projects/Networld/src/core/NetworldCore.h) / [NetworldCore.cpp](file:///c:/Users/leoul/Godot/Projects/Networld/src/core/NetworldCore.cpp) et sortir la vitesse serveur (`5.0f`) en constante/composant propre.
+  3. [ ] Ajouter la synchronisation de rotation (`SpawnEntityMsg::rotation`) et décider du contrôle local sur le Host (Listen-Server).
+  4. [ ] Concevoir la couche de fiabilité (`RELIABLE_EVENTS` : ACK / resend) pour `SpawnEntityMsg` / `DespawnEntityMsg`.
 
 ---
 
@@ -25,6 +25,7 @@ Bienvenue dans le dossier **Devlog** de **Networld**. Ce dossier te permet de ga
 | **[02_2026-11-14_stream_et_packet_dispatcher.md](file:///c:/Users/leoul/Godot/Projects/Networld/devlog/02_2026-11-14_stream_et_packet_dispatcher.md)** | **Session #02 (14 Nov 2026)** : Migration C++20 (`SConstruct`), concepts (`NetStream.h`), `StreamWriter`/`StreamReader` et `PacketDispatcher`. |
 | **[03_2026-11-16_netmessage_et_sync_entites.md](file:///c:/Users/leoul/Godot/Projects/Networld/devlog/03_2026-11-16_netmessage_et_sync_entites.md)** | **Session #03 (16 Nov 2026)** : Messages `NetMessage.h`, câblage `PacketDispatcher`/`NetEvent` dans `NetWorldCore`, mapping d'IDs Flecs et signaux Godot (`entity_spawned`/`entity_despawned`). |
 | **[04_2026-11-17_keepalive_nettoyage_et_inputs.md](file:///c:/Users/leoul/Godot/Projects/Networld/devlog/04_2026-11-17_keepalive_nettoyage_et_inputs.md)** | **Session #04 (17 Nov 2026)** : Keepalive UDP (`KnockMsg`), nettoyage technique `Core`/`Godot`, et inputs joueur autoritaires (`InputMsg`) jusqu'à GDScript. |
+| **[05_2026-11-18_propriete_locale_et_separation_roles.md](file:///c:/Users/leoul/Godot/Projects/Networld/devlog/05_2026-11-18_propriete_locale_et_separation_roles.md)** | **Session #05 (18 Nov 2026)** : Propriété locale (`is_owner` / `is_local` + caméra), interface `INetRole`, extraction `ServerRole`/`ClientRole` et séparation de la simulation Flecs. |
 | **[TEMPLATE_DEVLOG.md](file:///c:/Users/leoul/Godot/Projects/Networld/devlog/TEMPLATE_DEVLOG.md)** | **Modèle de session** à copier-coller à chaque nouvelle session de code (`01_YYYY-MM-DD_sujet.md`, `02_...`). |
 
 ---
@@ -38,7 +39,8 @@ Bienvenue dans le dossier **Devlog** de **Networld**. Ce dossier te permet de ga
 | **[#02](file:///c:/Users/leoul/Godot/Projects/Networld/devlog/02_2026-11-14_stream_et_packet_dispatcher.md)** | `2026-11-14` | `7h 47m` | Migration C++20, `NetStream` (concepts), `StreamWriter`/`StreamReader` et `PacketDispatcher` | 🟡 En cours (câblage dans `NetWorldCore` à faire) |
 | **[#03](file:///c:/Users/leoul/Godot/Projects/Networld/devlog/03_2026-11-16_netmessage_et_sync_entites.md)** | `2026-11-16` | `4h 07m` | `NetMessage.h`, routage `PacketDispatcher` & `NetEvent` dans `NetWorldCore`, mapping d'IDs Flecs et signaux Godot | 🟡 En cours (keepalive client / despawn à stabiliser) |
 | **[#04](file:///c:/Users/leoul/Godot/Projects/Networld/devlog/04_2026-11-17_keepalive_nettoyage_et_inputs.md)** | `2026-11-17` | `5h 24m` | Keepalive UDP, nettoyage Core/Godot, et inputs joueur autoritaires (`InputMsg`) jusqu'à GDScript | 🟢 Terminé (commit `c6e3a33`) |
-| *#05* | *À venir* | *—* | *Copier `TEMPLATE_DEVLOG.md` vers `05_YYYY-MM-DD_titre.md`* | *—* |
+| **[#05](file:///c:/Users/leoul/Godot/Projects/Networld/devlog/05_2026-11-18_propriete_locale_et_separation_roles.md)** | `2026-11-18` | `~6h 25m` | Propriété locale (`is_local`, suivi caméra) et séparation `INetRole` (`ServerRole` / `ClientRole`) | 🟢 Terminé (commit `786fdd2`) |
+| *#06* | *À venir* | *—* | *Copier `TEMPLATE_DEVLOG.md` vers `06_YYYY-MM-DD_titre.md`* | *—* |
 
 ---
 
