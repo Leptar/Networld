@@ -12,6 +12,9 @@
 namespace networld {
     class ServerRole : public INetRole {
 
+        Vec3 host_input_{};
+        float host_accumulator_ = 0.0f;
+
         // TODO : Mettre l'option pour passer les id de 32 a 64
         std::unordered_map<uint32_t, uint64_t> peer_entities_; // (peer_id -> server_entity_id)
         std::unordered_map<uint32_t, uint64_t> peer_inputs; // (peer_id -> last_tick_input)
@@ -30,6 +33,8 @@ namespace networld {
         void on_peer_connected(NetWorldCore &core, uint32_t peer_id) override;
         void on_peer_disconnected(NetWorldCore &core, uint32_t peer_id) override;
         void on_egress(NetWorldCore &core, float delta_time) override;
+        void set_client_input(const Vec3 &input) override;
+        uint64_t get_local_entity_id() const override { return server_player_entity_id_; }
     };
 } // networld
 

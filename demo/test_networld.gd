@@ -91,7 +91,7 @@ func _on_entity_despawned(entity_id: int) -> void:
 	print("[VIEW] Despawn entité ", entity_id)
 
 func _process(_delta: float) -> void:
-	if not is_client:
+	if local_entity_id == 0:
 		return
 	
 	var dir: Vector2 = Input.get_vector("ui_left", "ui_right", "ui_up", "ui_down")

@@ -99,13 +99,15 @@ namespace networld {
         // Entite serveur de test
         auto server_player = core.get_ecs().entity("ServerPlayer")
            .set<Position3D>({Vec3(0, 5, 0)})
-           .set<Velocity3D>({Vec3(1, 0, 0)})
+           .set<Velocity3D>({Vec3(0, 0, 0)})
            .set<Rotation3D>({Quat{}})
            .add<Networked>();
 
         server_player_entity_id_ = server_player.id();
-        core.push_spawned_entity({server_player.id(), Vec3(0, 5, 0)});
+        core.push_spawned_entity({server_player.id(), Vec3(0, 5, 0), true, Quat{}});
         sync_accumulator_ = 0.0f;
+        host_input_ = {};
+        host_accumulator_ = 0.0f;
     }
 
     void ServerRole::on_stop(NetWorldCore &core) {
@@ -123,6 +125,8 @@ namespace networld {
         }
 
         sync_accumulator_ = 0.0f;
+        host_input_ = {};
+        host_accumulator_ = 0.0f;
         // TODO : voir cette version plus tard ptetre (si c'est pertinent)
         /*
          *  std::vector<uint64_t> to_destroy;
@@ -183,6 +187,20 @@ namespace networld {
         if (!sync_query_) return;
 
         sync_accumulator_ += delta_time;
+
+        host_accumulator_ += std::min(delta_time, 0.25f);
+        while (host_accumulator_ >= FIXED_DT) {
+            host_accumulator_ -= FIXED_DT;
+
+            if (server_player_entity_id_ != 0) {
+                auto pos = core.get_ecs().entity(server_player_entity_id_).try_get_mut<Position3D>();
+                auto rot = core.get_ecs().entity(server_player_entity_id_).try_get_mut<Rotation3D>();
+                if (pos && rot) {
+                    simulate_player_step(pos->value, rot->value, host_input_, FIXED_DT);
+                }
+            }
+        }
+
         if (sync_accumulator_ < NET_SYNC_INTERVAL) return;
         sync_accumulator_ = std::fmod(sync_accumulator_, NET_SYNC_INTERVAL);
 
@@ -213,5 +231,9 @@ namespace networld {
             std::vector<uint8_t> out = encode_packet(sync_msg);
             core.get_transport()->send(PEER_BROADCAST, NetChannel::UNRELIABLE_STATE, out.data(), out.size());
         }*/
+    }
+
+    void ServerRole::set_client_input(const Vec3 &input) {
+        host_input_ = input;
     }
 } // networld

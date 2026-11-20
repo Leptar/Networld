@@ -45,11 +45,14 @@ namespace networld {
             apply_batches(core, msg.batches);
 
             while (!pending_inputs.empty() && pending_inputs.front().seq <= msg.ack_input_seq) pending_inputs.pop_front();
+
             if (local_player_entity_id_ != 0) {
                 auto pos = core.get_ecs().entity(local_player_entity_id_).try_get_mut<Position3D>();
                 auto rot = core.get_ecs().entity(local_player_entity_id_).try_get_mut<Rotation3D>();
-                for (auto pendingInput: pending_inputs) {
-                    simulate_player_step(pos->value, rot->value, pendingInput.direction, FIXED_DT);
+                if (pos || rot) {
+                    for (auto pendingInput: pending_inputs) {
+                        simulate_player_step(pos->value, rot->value, pendingInput.direction, FIXED_DT);
+                    }
                 }
             }
 
