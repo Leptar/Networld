@@ -85,10 +85,12 @@ namespace networld {
     struct StateSyncMsg {
         static constexpr PacketId PACKET_ID = PacketId::STATE_SYNC;
         uint32_t tick = 0;
+        uint64_t ack_input_seq = 0;
         std::vector<NetBatch> batches;
 
         void serialize(StreamWriter& stream) const {
             stream.write<uint32_t>(tick);
+            stream.write<uint64_t>(ack_input_seq);
 
             std::vector<uint8_t> soa_buffer;
             for (const NetBatch& batch : batches) {
@@ -100,13 +102,15 @@ namespace networld {
 
         static std::optional<StateSyncMsg> deserialize(StreamReader& stream) {
             auto tick = stream.read<uint32_t>();
+            auto ack_input_seq = stream.read<uint64_t>();
             auto raw_opt = stream.read_bytes();
-            if (!tick || !raw_opt) {
+            if (!tick || !raw_opt || !ack_input_seq) {
                 return std::nullopt;
             }
 
             StateSyncMsg msg;
             msg.tick = *tick;
+            msg.ack_input_seq = *ack_input_seq;
             if (!raw_opt->empty()) {
                 msg.batches = deserialize_buffer(raw_opt->data(), raw_opt->size());
                 if (msg.batches.empty()) {

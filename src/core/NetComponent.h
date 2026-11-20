@@ -82,6 +82,7 @@ namespace networld {
 
     // tag
     struct Networked {};
+    struct LocalPredicted {};
 
     // je stocke un ID a la place, plutot qu'un node.
     struct ExternalView {
