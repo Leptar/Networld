@@ -5,7 +5,7 @@
 #include "ServerRole.h"
 #include <cmath>
 #include <ranges>
-
+#include "MovementSim.h"
 #include "NetMessage.h"
 #include "NetworldCore.h"
 
@@ -64,7 +64,14 @@ namespace networld {
 
             peer_inputs[peer_id] = input_msg.tick_input;
 
-            if (!std::isfinite(input_msg.direction.x) || !std::isfinite(input_msg.direction.z)) return;
+            flecs::entity e = core.get_ecs().entity(it->second);
+            if (!e.is_alive()) return;
+
+            auto* pos = e.try_get_mut<Position3D>();
+            auto* rot = e.try_get_mut<Rotation3D>();
+            if (!pos || !rot) return;
+            simulate_player_step(pos->value, rot->value, input_msg.direction, FIXED_DT);
+            /*if (!std::isfinite(input_msg.direction.x) || !std::isfinite(input_msg.direction.z)) return;
 
             Vec3 dir_input;
             float norme = std::sqrt(input_msg.direction.x*input_msg.direction.x
@@ -79,7 +86,7 @@ namespace networld {
             if (norme > 0.001f) {
                 float yaw = std::atan2(dir_input.x, dir_input.z);
                 core.set_entity_rotation(entity_id, Quat::from_yaw(yaw));
-            }
+            }*/
         });
 
         // build query
@@ -192,9 +199,19 @@ namespace networld {
             }
         });
 
-        if (!sync_msg.batches.empty()) {
+        if (sync_msg.batches.empty()) return;
+
+        for (uint32_t peer_id: peer_entities_ | std::views::keys) {
+            auto it = peer_inputs.find(peer_id);
+            sync_msg.ack_input_seq = (it != peer_entities_.end()) ? it->second : 0;
+
+            std::vector<uint8_t> out = encode_packet(sync_msg);
+            core.get_transport()->send(peer_id, NetChannel::UNRELIABLE_STATE, out.data(), out.size());
+        }
+
+        /*if (!sync_msg.batches.empty()) {
             std::vector<uint8_t> out = encode_packet(sync_msg);
             core.get_transport()->send(PEER_BROADCAST, NetChannel::UNRELIABLE_STATE, out.data(), out.size());
-        }
+        }*/
     }
 } // networld

@@ -86,6 +86,16 @@ namespace networld {
                 }
             })
             .disable();
+
+        ecs_.system<const Position3D, const Rotation3D, const ExternalView>("CollectPredictedViewUpdates")
+            .with<LocalPredicted>()
+            .kind(flecs::PostUpdate)
+            .each([this](flecs::entity e, const Position3D& p, const Rotation3D& r, const ExternalView& v) {
+                if (v.host_handle != 0) {
+                    view_updates_.push_back({e.id(), v.host_handle, p.value, r.value});
+                }
+            })
+            .disable();
     }
 
     NetWorldCore::~NetWorldCore() {
@@ -217,6 +227,7 @@ namespace networld {
     void NetWorldCore::set_interpolation_systems_enabled(bool enabled) {
         set_system_enabled("InterpolateViews", enabled);
         set_system_enabled("CollectInterpolatedViewUpdates", enabled);
+        set_system_enabled("CollectPredictedViewUpdates", enabled);
     }
 
     bool NetWorldCore::set_system_enabled(const char *name, bool enabled) {

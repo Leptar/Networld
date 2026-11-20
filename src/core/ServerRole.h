@@ -11,6 +11,8 @@
 
 namespace networld {
     class ServerRole : public INetRole {
+
+        // TODO : Mettre l'option pour passer les id de 32 a 64
         std::unordered_map<uint32_t, uint64_t> peer_entities_; // (peer_id -> server_entity_id)
         std::unordered_map<uint32_t, uint64_t> peer_inputs; // (peer_id -> last_tick_input)
 
@@ -20,8 +22,6 @@ namespace networld {
         flecs::query<Position3D, Rotation3D, Velocity3D> sync_query_;
 
         uint64_t server_player_entity_id_ = 0;
-
-        static constexpr float PLAYER_MOVE_SPEED = 5.0f;
         float sync_accumulator_ = 0.0f;
 
     public:
