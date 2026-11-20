@@ -4,6 +4,7 @@
 
 #include "ClientRole.h"
 #include <ranges>
+#include "MovementSim.h"
 #include "NetMessage.h"
 #include "NetworldCore.h"
 
@@ -32,6 +33,9 @@ namespace networld {
     void ClientRole::on_start(NetWorldCore &core) {
         core.set_simulation_systems_enabled(false);
         core.set_interpolation_systems_enabled(true);
+        pending_inputs.clear();
+        next_input_seq = 0;
+        fixed_accumulator = 0.0f;
 
         PacketDispatcher& packet_dispatcher = core.get_dispatcher();
 
@@ -39,6 +43,15 @@ namespace networld {
             if (msg.tick <= last_received_tick_) return;
             last_received_tick_ = msg.tick;
             apply_batches(core, msg.batches);
+
+            while (!pending_inputs.empty() && pending_inputs.front().seq <= msg.ack_input_seq) pending_inputs.pop_front();
+            if (local_player_entity_id_ != 0) {
+                auto pos = core.get_ecs().entity(local_player_entity_id_).try_get_mut<Position3D>();
+                auto rot = core.get_ecs().entity(local_player_entity_id_).try_get_mut<Rotation3D>();
+                for (auto pendingInput: pending_inputs) {
+                    simulate_player_step(pos->value, rot->value, pendingInput.direction, FIXED_DT);
+                }
+            }
 
             if (msg.tick % 60 == 0 || last_received_tick_ == 0) {
                 /*printf("[CLIENT] StateSync tick=%u batches=%zu\n", msg.tick, msg.batches.size());
@@ -72,17 +85,22 @@ namespace networld {
 
             uint64_t local_id = core.create_networked_entity(msg.position);
             net_to_local_entities_[msg.entity_Id] = local_id;
-            core.get_ecs().entity(local_id).set<InterpolationState>({
+
+
+            core.set_entity_rotation(local_id, msg.rotation);
+            if (msg.is_owner) {
+                local_player_entity_id_ = local_id;
+                core.get_ecs().entity(local_id).add<LocalPredicted>();
+            } else {
+                core.get_ecs().entity(local_id).set<InterpolationState>({
                 msg.position, msg.position, msg.position,
                 msg.rotation, msg.rotation, msg.rotation,
                 0.f,
                 NET_SYNC_INTERVAL
-            });
-
-            if (msg.is_owner) {
-                local_player_entity_id_ = local_id;
+                });
             }
             core.push_spawned_entity({local_id, msg.position, msg.is_owner, msg.rotation});
+
 
             printf("[CLIENT] SpawnEntityMsg server_id=%llu -> local_id=%llu (%.2f, %.2f, %.2f)\n",
                     msg.entity_Id, local_id, msg.position.x, msg.position.y, msg.position.z);
@@ -97,6 +115,7 @@ namespace networld {
 
             if (it->second == local_player_entity_id_) {
                 local_player_entity_id_ = 0;
+                pending_inputs.clear();
             }
             core.destroy_entity(it->second);
             net_to_local_entities_.erase(it);
@@ -112,6 +131,9 @@ namespace networld {
             core.destroy_entity(local_id);
         }
 
+        pending_inputs.clear();
+        next_input_seq = 0;
+        fixed_accumulator = 0.0f;
         net_to_local_entities_.clear();
         local_player_entity_id_ = 0;
         last_received_tick_ = 0;
@@ -124,11 +146,31 @@ namespace networld {
             core.get_transport()->send(PEER_SERVER, NetChannel::UNRELIABLE_STATE, knock_pkt.data(), knock_pkt.size());
         }
 
-        InputMsg input_msg;
+        fixed_accumulator += std::min(delta_time, 0.25f);
+        while (fixed_accumulator >= FIXED_DT) {
+            fixed_accumulator -= FIXED_DT;
+
+            uint64_t seq = ++next_input_seq;
+            auto input_pkt = encode_packet(InputMsg{seq, input_client_});
+            core.get_transport()->send(PEER_SERVER, NetChannel::UNRELIABLE_STATE, input_pkt.data(), input_pkt.size());
+
+            if (local_player_entity_id_ != 0) {
+                if (pending_inputs.size() >= 128) pending_inputs.pop_front();
+                pending_inputs.push_back({seq, input_client_});
+
+                auto pos = core.get_ecs().entity(local_player_entity_id_).try_get_mut<Position3D>();
+                auto rot = core.get_ecs().entity(local_player_entity_id_).try_get_mut<Rotation3D>();
+                if (pos && rot) {
+                    simulate_player_step(pos->value, rot->value, input_client_, FIXED_DT);
+                }
+            }
+        }
+
+        /*InputMsg input_msg;
         input_msg.tick_input = core.get_current_tick();
         input_msg.direction = input_client_;
         auto input_pkt = encode_packet(input_msg);
-        core.get_transport()->send(PEER_SERVER, NetChannel::UNRELIABLE_STATE, input_pkt.data(), input_pkt.size());
+        core.get_transport()->send(PEER_SERVER, NetChannel::UNRELIABLE_STATE, input_pkt.data(), input_pkt.size());*/
     }
 
     void ClientRole::set_client_input(const Vec3 &input) {

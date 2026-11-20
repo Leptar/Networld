@@ -5,7 +5,7 @@
 #ifndef NETWORLD_CLIENTROLE_H
 #define NETWORLD_CLIENTROLE_H
 #include <unordered_map>
-
+#include <deque>
 #include "INetRole.h"
 #include "NetBatch.h"
 
@@ -14,6 +14,15 @@ namespace networld {
     constexpr float SNAP_DIST = 100.0f;
 
     class ClientRole : public INetRole {
+
+        struct PendingInput {
+            uint64_t seq = 0;
+            Vec3 direction{};
+        };
+        std::deque<PendingInput> pending_inputs;
+        uint64_t next_input_seq = 0;
+        float fixed_accumulator = 0.0f;
+
         std::unordered_map<uint64_t, uint64_t> net_to_local_entities_; // (server_entity_id -> local_entity_id)
         Vec3 input_client_{};
         uint64_t local_player_entity_id_ = 0;

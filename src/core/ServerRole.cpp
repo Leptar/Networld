@@ -203,7 +203,7 @@ namespace networld {
 
         for (uint32_t peer_id: peer_entities_ | std::views::keys) {
             auto it = peer_inputs.find(peer_id);
-            sync_msg.ack_input_seq = (it != peer_entities_.end()) ? it->second : 0;
+            sync_msg.ack_input_seq = (it != peer_inputs.end()) ? it->second : 0;
 
             std::vector<uint8_t> out = encode_packet(sync_msg);
             core.get_transport()->send(peer_id, NetChannel::UNRELIABLE_STATE, out.data(), out.size());
