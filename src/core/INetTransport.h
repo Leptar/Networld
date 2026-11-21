@@ -10,6 +10,7 @@
 #include <vector>
 #include <string>
 
+static constexpr uint32_t PEER_NONE = 0;
 static constexpr uint32_t PEER_BROADCAST = 0;
 static constexpr uint32_t PEER_SERVER = 1;
 

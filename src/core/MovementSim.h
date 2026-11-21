@@ -10,7 +10,6 @@
 
 namespace networld {
 
-    inline constexpr float FIXED_DT = 1.0f / 60.0f;
     inline constexpr float PLAYER_MOVE_SPEED = 5.0f;
     inline constexpr float PLAYER_TURN_SPEED = 12.0f;
 

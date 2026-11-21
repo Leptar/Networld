@@ -6,11 +6,18 @@
 #define NETWORLD_NETCOMPONENT_H
 
 #pragma once
-#include <cstdint>
+#include <array>
+#include <cstring>
+#include <span>
+#include <type_traits>
 #include <cmath>
+#include <optional>
+#include <string>
+#include "INetTransport.h"
 
 namespace networld {
 
+    class NetWorldCore;
     // vu que component utiliser vector3 de godot faut les separer de la couche godot
     struct Vec3 {
         float x = 0.0f;
@@ -79,6 +86,9 @@ namespace networld {
     struct Rotation3D { Quat value; };
     struct Velocity3D { Vec3 value; };
     struct Gravity    { Vec3 force; };
+    struct NetType { uint32_t type_id = 0; };
+    struct NetOwnership { uint32_t owner_peer_id = PEER_NONE; };
+    struct NetEntityID { uint64_t server_id = 0; };
 
     // tag
     struct Networked {};
@@ -98,6 +108,8 @@ namespace networld {
     };
 
     struct EntitySpawnEntry {
+        uint32_t type_id = 0;
+        uint32_t owner_peer_id = 0;
         uint64_t entity_id = 0;
         Vec3 position;
         bool is_local = false;
@@ -118,6 +130,71 @@ namespace networld {
         float duration = 0.05f;
     };
 
+    struct SpawnParams {
+        uint32_t type_id = 0;
+        uint32_t owner_peer_id = 0;
+        Vec3 position;
+        Quat rotation;
+        bool predicted = false;
+        uint64_t host_handle = 0;
+        std::string debug_name;
+    };
+
+    struct PeerEvent {
+        uint32_t peer_id = 0;
+        bool is_local = false;
+    };
+
+    struct SimContext {
+        NetWorldCore& core;
+        float dt = 0.0f;
+        uint64_t input_seq = 0;
+        bool is_replay = false;
+    };
+
+    // input
+    struct InputPayload {
+        static constexpr size_t MAX_SIZE = 64; // pas besoin de plus je pense
+        uint8_t size = 0;
+        std::array<uint8_t, MAX_SIZE> data{};
+
+        template <typename T>
+        static InputPayload from(const T& value) {
+            static_assert(std::is_trivially_copyable_v<T>);
+            static_assert(sizeof(T) <= MAX_SIZE);
+
+            InputPayload payload;
+            payload.size = static_cast<uint8_t>(sizeof(T));
+            std::memcpy(payload.data.data(), &value, payload.size);
+            return payload;
+        }
+
+        // TODO Note : utiliser requires ptetre, ca collerait un peu plus cpp 20
+        template <typename T>
+        bool read_as(T& value) const{
+            static_assert(std::is_trivially_copyable_v<T>);
+            static_assert(sizeof(T) <= MAX_SIZE);
+
+            if (size != sizeof(T)) return false;
+
+            std::memcpy(&value, data.data(), sizeof(T));
+            return true;
+        }
+
+        [[nodiscard]] std::span<const uint8_t> bytes() const {
+            return {data.data(), size};
+        }
+
+        static std::optional<InputPayload> from_bytes(std::span<const uint8_t> raw) {
+            if (raw.size() > MAX_SIZE ) return std::nullopt;
+            InputPayload payload;
+            payload.size = static_cast<uint8_t>(raw.size());
+            if (!raw.empty()) std::memcpy(payload.data.data(), raw.data(), payload.size);
+            return payload;
+        }
+
+        [[nodiscard]] bool empty() const { return size == 0; }
+    };
 } // namespace networld
 
 #endif //NETWORLD_NETCOMPONENT_H
