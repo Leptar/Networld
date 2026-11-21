@@ -171,16 +171,16 @@ sequenceDiagram
 
 Chaque étape doit laisser le projet **compilable, testable et fonctionnel** :
 
-### Étape 1 — Purge du Gameplay dans `NetWorldCore`, Ownership & Simulation Générique
+### Étape 1 — Purge du Gameplay dans `NetWorldCore`, Ownership, Simulation Générique & 2 Pipelines
 - [ ] Corriger les 2 micro-bugs de la session #06 (`if (pos && rot)` dans [ClientRole.cpp](file:///c:/Users/leoul/Godot/Projects/Networld/src/core/ClientRole.cpp#L52), aligner les 4 arguments du signal `entity_spawned` dans [Networld.cpp](file:///c:/Users/leoul/Godot/Projects/Networld/src/godot/Networld.cpp#L165)).
-- [ ] Retirer `"ServerPlayer"`, l'auto-spawn et [MovementSim.h](file:///c:/Users/leoul/Godot/Projects/Networld/src/core/MovementSim.h) de `src/core/`.
-- [ ] Introduire `OwnerPeerId`, `HostMode` (`Dedicated` vs `Listen` avec `LOCAL_PEER_ID`) et remonter les événements `peer_connected` / `peer_disconnected`.
-- [ ] Remplacer `InputMsg::direction` par un payload d'input générique et poser le mécanisme de **step unitaire rejouable** (callback / interface de simulation).
-- [ ] Structurer les phases Flecs dans `NetWorldCore` et évaluer les `Peers` en entités Flecs.
+- [ ] Retirer `"ServerPlayer"`, l'auto-spawn et [MovementSim.h](file:///c:/Users/leoul/Godot/Projects/Networld/src/core/MovementSim.h) de `src/core/` (déplacer le mouvement de démo côté couche Godot / démo).
+- [ ] Implémenter **Contrat 1** : `PEER_NONE = 0` / `PEER_SERVER = 1` / clients `>= 2`, composant POD `NetOwnership`, `HostMode` (`Dedicated` vs `Listen`), événements `peer_connected` / `peer_disconnected` et helper `destroy_entities_owned_by(peer_id)`.
+- [ ] Implémenter **Contrat 2** : `WelcomeMsg { assigned_peer_id, server_tick }`, `SpawnParams` + `SpawnEntityMsg { entity_id, type_id, owner_peer_id, position, rotation, predicted }` et spawn/despawn piloté par l'extérieur (`spawn_networked_entity` / `despawn_networked_entity`).
+- [ ] Implémenter **Contrat 3** : `InputPayload` inline fixe (`64 octets`, 0 allocation), `InputMsg { seq, target_entity_id, payload }` vérifié par ownership, file d'inputs bornée côté serveur (anti-speedhack) et `register_entity_simulator(type_id, callback)` avec `SimContext { core, dt, input_seq, is_replay }`.
+- [ ] Implémenter **Contrat 4** : supprimer `ApplyGravity`/`ApplyMovement` de démo du Core, séparer `step_simulation(fixed_dt)` (`_physics_process` → `sim_pipeline_` / phase `NetFixedSim`) et `step_visual(delta)` (`_process` → `ecs_.progress(delta)` avec `NetInterpolate` → `NetCollectViews` + `CollectDirectViews .without<InterpolationState>()`), tout en conservant Flecs Explorer (`flecs::Rest`) actif.
 
-### Étape 2 — Boucle `_physics_process` / `_process` & `INetPhysics` (Cinématique)
-- [ ] Scinder `NetWorldCore::step()` en `step_simulation(fixed_dt)` (`_physics_process`) et `step_visual(delta)` (`_process`).
-- [ ] Concevoir `INetPhysics` + `DefaultKinematicPhysics` dans `src/core/`.
+### Étape 2 — Interface Physique `INetPhysics` (Cinématique) & `GodotPhysicsBridge`
+- [ ] Concevoir `INetPhysics` + `DefaultKinematicPhysics` dans `src/core/` et injecter `INetPhysics&` dans `SimContext`.
 - [ ] Implémenter `GodotPhysicsBridge` sur `PhysicsServer3D` (`body_test_motion`, `PhysicsDirectSpaceState3D`) dans `src/godot/`.
 - [ ] Valider prédiction + réconciliation avec un vrai sol, des murs (`StaticBody3D`) et de la gravité dans `demo/`.
 
@@ -197,10 +197,24 @@ Chaque étape doit laisser le projet **compilable, testable et fonctionnel** :
 
 ---
 
-## 6. Points à Creuser Avant de Coder l'Étape 1
+## 6. Contrats Validés pour l'Étape 1
 
-Quand on passera à la conception détaillée de l'Étape 1, voici les 4 contrats précis à dessiner sur le tableau blanc :
-1. **Contrat `Peer` & `Ownership` :** comment sont identifiés `LOCAL_PEER_ID` vs clients distants, et comment l'ownership est stocké dans Flecs (composant `OwnerPeer { uint32_t peer_id }` vs relation `(OwnedBy, peer_entity)`).
-2. **Contrat de Spawn piloté par l'extérieur :** signature de `spawn_networked_entity(type_id, owner_peer_id, ...)` et format exact de `SpawnEntityMsg` (ajout de `type_id` pour que le client sache quelle `PackedScene` instancier).
-3. **Contrat d'Input générique & Step unitaire rejouable :** représentation mémoire d'un input dans `pending_inputs` (buffer brut `std::vector<uint8_t>` ou buffer taille fixe `SmallBuffer` sans allocation heap) et signature du callback/interface de simulation.
-4. **Phases Flecs dans `NetWorldCore` :** ordre exact entre Ingress, Réconciliation, Simulation fixe, Interpolation, Extraction SoA et Collecte des vues.
+Les 4 contrats suivants sont figés et prêts pour l'implémentation de l'Étape 1 :
+
+1. **Contrat `Peer`, `HostMode` & `Ownership` :**
+   - IDs : `PEER_NONE = 0` *(ownership monde/serveur ; `PEER_BROADCAST = 0` sur `send()`)*, `PEER_SERVER = 1` *(pair local en `HostMode::Listen`)*, clients distants `>= 2`.
+   - Ownership stocké en composant POD `NetOwnership { uint32_t owner_peer_id = PEER_NONE; }` (zéro fragmentation d'archétype SoA, sérialisable nativement).
+   - `HostMode::Listen` émet `peer_connected(PEER_SERVER, is_local = true)` au démarrage ; `HostMode::Dedicated` n'émet rien tant qu'aucun client ne se connecte.
+   - Sur `peer_disconnected(peer_id)`, le Core laisse le jeu décider et fournit `destroy_entities_owned_by(peer_id)`.
+2. **Contrat de Spawn & `WelcomeMsg` :**
+   - `WelcomeMsg { uint32_t assigned_peer_id; uint32_t server_tick; }` envoyé dès la connexion d'un client.
+   - `SpawnParams` / `SpawnEntityMsg` portent `{ entity_id, type_id, owner_peer_id, position, rotation, predicted }` ; `SpawnEntityMsg` est identique pour tous les pairs.
+   - `NetWorldCore::spawn_networked_entity(params)` / `despawn_networked_entity(id)` pilotés de l'extérieur.
+3. **Contrat d'Input Générique & Step Unitaire Rejouable :**
+   - `InputPayload { static constexpr size_t MAX_SIZE = 64; uint8_t size; std::array<uint8_t, 64> data; }` (inline, 0 allocation heap).
+   - `InputMsg { uint64_t seq; uint64_t target_entity_id; InputPayload payload; }` avec vérification d'ownership côté serveur et file d'inputs bornée consommée à `FIXED_DT` (anti-speedhack).
+   - `register_entity_simulator(uint32_t type_id, EntitySimCallback)` avec `SimContext { NetWorldCore& core; float dt; uint64_t input_seq; bool is_replay; }`.
+4. **Contrat Pipelines Flecs (`step_simulation` vs `step_visual`) :**
+   - `step_simulation(fixed_dt)` (dans `_physics_process`) : Ingress C++ + Replay unitaire → exécution des simulateurs + `ecs_.run_pipeline(sim_pipeline_, fixed_dt)` (`NetFixedSim`) → Egress C++.
+   - `step_visual(delta)` (dans `_process`) : `ecs_.progress(delta)` sur le pipeline visuel (`NetInterpolate` → `NetCollectViews`) afin de garder **Flecs Explorer (`flecs::Rest`)** actif.
+   - Collecte des vues simplifiée en 2 systèmes toujours actifs : `CollectInterpolatedViews` et `CollectDirectViews` (`.without<InterpolationState>()`), supprimant `set_simulation_systems_enabled` / `set_interpolation_systems_enabled` ainsi que `ApplyGravity`/`ApplyMovement` de démo.
