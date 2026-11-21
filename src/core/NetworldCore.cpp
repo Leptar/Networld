@@ -1,4 +1,4 @@
-//
+﻿//
 // Created by leoul on 2026-11-09.
 //
 
@@ -37,33 +37,19 @@ namespace networld {
             .member<float>("z")
             .member<float>("w");
 
+        ecs_.component<NetType>().member<uint32_t>("type_id");
+        ecs_.component<NetOwnership>().member<uint32_t>("owner_peer_id");
+        ecs_.component<NetEntityID>().member<uint64_t>("server_id");
+
         ecs_.component<Rotation3D>().member<Quat>("value");
         ecs_.component<Position3D>().member<Vec3>("value");
         ecs_.component<Velocity3D>().member<Vec3>("value");
         ecs_.component<Gravity>().member<Vec3>("force");
 
         ecs_.set<flecs::Rest>({});
-        // Système 1 : Appliquer la gravité (modifie la vélocité)
-        ecs_.system<Velocity3D, const Gravity>("ApplyGravity")
-            .each([](flecs::iter& it, size_t index, Velocity3D& v, const Gravity& g) {
-                v.value += g.force * it.delta_time();
-            });
 
-        // Système 2 : Appliquer le mouvement (modifie la position)
-        ecs_.system<Position3D, const Velocity3D>("ApplyMovement")
-            .each([](flecs::iter& it, size_t index, Position3D& p, const Velocity3D& v) {
-                p.value += v.value * it.delta_time();
-            });
-
-        // Systeme 3 change ducoup
-        ecs_.system<const Position3D, const Rotation3D, const ExternalView>("CollectViewUpdates")
-            .kind(flecs::PostUpdate)
-            .each([this](flecs::entity e, const Position3D& p, const Rotation3D& r, const ExternalView& v) {
-                if (v.host_handle != 0) {
-                    // On enregistre la mise à jour dans le tampon de sortie
-                    view_updates_.push_back({e.id(), v.host_handle, p.value, r.value});
-                }
-            });
+        fixed_sim_phase_ = ecs_.entity("NetFixedSim").add(flecs::Phase);
+        sim_pipeline_ = ecs_.pipeline().with(flecs::System).with(fixed_sim_phase_).build();
 
         // step pour l'interpolation (disable par defaut)
         ecs_.system<InterpolationState>("InterpolateViews")
@@ -75,7 +61,7 @@ namespace networld {
                     : 1.0f;
                 interp.visual_pos = Vec3::lerp(interp.prev_pos, interp.target_pos, t);
                 interp.visual_rot = Quat::nlerp(interp.prev_rot, interp.target_rot, t);
-            }).disable();
+            });
 
         // collect view intepolates (un peu pareil que collect view)
         ecs_.system<const InterpolationState, const ExternalView>("CollectInterpolatedViewUpdates")
@@ -84,18 +70,16 @@ namespace networld {
                 if (v.host_handle != 0) {
                     view_updates_.push_back({e.id(), v.host_handle, interp.visual_pos, interp.visual_rot});
                 }
-            })
-            .disable();
+            });
 
         ecs_.system<const Position3D, const Rotation3D, const ExternalView>("CollectPredictedViewUpdates")
-            .with<LocalPredicted>()
+            .without<InterpolationState>()
             .kind(flecs::PostUpdate)
             .each([this](flecs::entity e, const Position3D& p, const Rotation3D& r, const ExternalView& v) {
                 if (v.host_handle != 0) {
                     view_updates_.push_back({e.id(), v.host_handle, p.value, r.value});
                 }
-            })
-            .disable();
+            });
     }
 
     NetWorldCore::~NetWorldCore() {
@@ -106,7 +90,7 @@ namespace networld {
         transport_ = std::move(transport);
     }
 
-    bool NetWorldCore::start_host(uint16_t port) {
+    bool NetWorldCore::start_host(uint16_t port, HostMode mode) {
         if (!transport_) return false;
         stop();
         packet_dispatcher_ = PacketDispatcher{};
@@ -137,9 +121,12 @@ namespace networld {
         if (transport_) {
             transport_->close();
         }
+
+        connected_peers_.clear();
+        disconnected_peers_.clear();
     }
 
-    void NetWorldCore::step(float delta_time) {
+    void NetWorldCore::step_simulation(float delta_time) {
         if (!transport_) return;
 
         // INGRESS : Réseau -> Désérialisation pure -> Application au NetWorld
@@ -165,25 +152,55 @@ namespace networld {
             }
         }
 
-        // SIMULATION ECS
-        view_updates_.clear();
+        // avance sim
         current_tick_++;
-        ecs_.progress(delta_time);
+        if (role_) role_->on_fixed_tick(*this, delta_time);
+        ecs_.run_pipeline(sim_pipeline_, delta_time);
 
         // EGRESS : Extraction NetWorld -> Sérialisation pure -> Réseau
         if (role_) role_->on_egress(*this, delta_time);
     }
 
-    uint64_t NetWorldCore::create_networked_entity(const Vec3 &initial_pos, uint64_t host_handle, const char *name) {
+    void NetWorldCore::step_visual(float delta_time) {
+        view_updates_.clear();
+        ecs_.progress(delta_time);
+    }
+
+    uint64_t NetWorldCore::create_local_entity(const SpawnParams &params) {
+        const char* name = params.debug_name.empty() ? nullptr : params.debug_name.c_str();
         auto e = ecs_.entity(name)
-            .set<Position3D>({initial_pos})
-            .set<Velocity3D>({{0, 0, 0}})
-            .set<Rotation3D>({Quat{}})
+            .set<Position3D>(Position3D{params.position})
+            .set<Rotation3D>(Rotation3D{params.rotation.normalized()})
+            .set<Velocity3D>(Velocity3D{Vec3{0,0,0}})
+            .set<NetType>(NetType{params.type_id})
+            .set<NetOwnership>(NetOwnership{params.owner_peer_id})
             .add<Networked>();
-        if (host_handle != 0) {
-            e.set<ExternalView>({host_handle});
+
+        if (params.host_handle != 0) {
+            e.set<ExternalView>({params.host_handle});
         }
         return e.id();
+    }
+
+    uint64_t NetWorldCore::spawn_networked_entity(const SpawnParams &params) {
+        uint64_t id = create_local_entity(params);
+        if (role_) role_->on_entity_spawned(*this, id, params);
+
+        bool is_local = (params.owner_peer_id != PEER_NONE && params.owner_peer_id == get_local_peer_id());
+        push_spawned_entity(
+    {params.type_id, params.owner_peer_id, id,
+            params.position, is_local, params.rotation.normalized()}
+        );
+        return id;
+    }
+
+    void NetWorldCore::despawn_networked_entity(uint64_t entity_id) {
+        flecs::entity e = ecs_.entity(entity_id);
+        if (!e.is_alive()) return;
+
+        if (role_) role_->on_entity_despawned(*this, entity_id);
+        push_despawned_entity(entity_id);
+        e.destruct();
     }
 
     void NetWorldCore::destroy_entity(uint64_t entity_id) {
@@ -191,10 +208,45 @@ namespace networld {
         e.destruct();
     }
 
+    void NetWorldCore::destroy_entities_owned_by(uint32_t peer_id) {
+        std::vector<uint64_t> to_destroy;
+        auto query = ecs_.query_builder<const NetOwnership>()
+            .with<Networked>()
+            .build();
+        query.each([&](flecs::entity e, const NetOwnership& ownership) {
+            if (ownership.owner_peer_id == peer_id) {
+                to_destroy.push_back(e.id());
+            }
+        });
+        for (uint64_t id : to_destroy) {
+            despawn_networked_entity(id);
+        }
+    }
+
     uint64_t NetWorldCore::find_entity(const char *name) const {
         flecs::entity e = ecs_.lookup(name);
         return e.id();
 
+    }
+
+    void NetWorldCore::register_entity_simulator(uint32_t type_id, EntitySimCallback cb) {
+        entity_simulators_[type_id] = std::move(cb);
+    }
+
+    void NetWorldCore::run_entity_simulator(uint64_t entity_id, const InputPayload &input, const SimContext &ctx) {
+        flecs::entity e = ecs_.entity(entity_id);
+        if (!e.is_alive()) return;
+
+        const auto* type = e.try_get<NetType>();
+        if (!type) return;
+        auto it = entity_simulators_.find(type->type_id);
+        if (it != entity_simulators_.end() && it->second) {
+            it->second(e, input, ctx);
+        }
+    }
+
+    void NetWorldCore::set_local_input(uint64_t target_local_entity_id, const InputPayload &payload) {
+        if (role_) role_->set_local_input(target_local_entity_id, payload);
     }
 
     void NetWorldCore::set_entity_position(uint64_t entity_id, const Vec3 &pos) {
@@ -218,18 +270,6 @@ namespace networld {
         }
     }
 
-    void NetWorldCore::set_simulation_systems_enabled(bool enabled) {
-        set_system_enabled("ApplyGravity", enabled);
-        set_system_enabled("ApplyMovement", enabled);
-        set_system_enabled("CollectViewUpdates", enabled);
-    }
-
-    void NetWorldCore::set_interpolation_systems_enabled(bool enabled) {
-        set_system_enabled("InterpolateViews", enabled);
-        set_system_enabled("CollectInterpolatedViewUpdates", enabled);
-        set_system_enabled("CollectPredictedViewUpdates", enabled);
-    }
-
     bool NetWorldCore::set_system_enabled(const char *name, bool enabled) {
         flecs::entity sys = ecs_.lookup(name);
         if (!sys.is_alive()) return false;
@@ -240,5 +280,9 @@ namespace networld {
             sys.disable();
         }
         return true;
+    }
+
+    uint32_t NetWorldCore::get_local_peer_id() const {
+        return role_ ? role_->get_local_peer_id() : PEER_NONE;
     }
 } // networld
