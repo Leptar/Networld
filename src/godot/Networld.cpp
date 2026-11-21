@@ -83,8 +83,10 @@ void NetWorld::set_entity_position(uint64_t entity_id, const Vector3 &pos) {
 }
 
 void NetWorld::set_client_input(const Vector3 &input) {
-    networld::Vec3 new_input = {input.x, input.y, input.z};
-    core_.set_client_input(new_input);
+    // TODO(1E): remplacer par set_local_move_input(entity_id, dir) via InputPayload
+    (void)input;
+    // networld::Vec3 new_input = {input.x, input.y, input.z};
+    // core_.set_client_input(new_input);
 }
 
 NetWorld::NetWorld() {
@@ -132,7 +134,7 @@ void NetWorld::host(int port) {
     core_.clear_spawned_entities();
     core_.stop();
     core_.set_transport(create_transport());
-    core_.start_host(port);
+    core_.start_host(port, networld::HostMode::LISTEN); // TODO(1E): exposer host_listen / host_dedicated
 }
 
 void NetWorld::join(String ip, int port) {
@@ -144,13 +146,17 @@ void NetWorld::join(String ip, int port) {
 }
 
 uint64_t NetWorld::spawn_local_entity(Vector3 pos, Node3D *visual_node) {
-    uint64_t handle = visual_node ? visual_node->get_instance_id() : 0;
-    return core_.create_networked_entity({pos.x, pos.y, pos.z}, handle);
-
+    // TODO(1E): remplacer par spawn_entity(SpawnParams)
+    (void)pos;
+    (void)visual_node;
+    return 0;
+    // uint64_t handle = visual_node ? visual_node->get_instance_id() : 0;
+    // return core_.create_networked_entity({pos.x, pos.y, pos.z}, handle);
 }
 
 void NetWorld::_process(double delta) {
-    core_.step(static_cast<float>(delta));
+    core_.step_simulation(static_cast<float>(delta));
+    core_.step_visual(static_cast<float>(delta));
 
     for (const auto &it : core_.get_despawned_entities()) {
         emit_signal("entity_despawned", it);

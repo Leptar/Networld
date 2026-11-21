@@ -33,8 +33,10 @@ namespace networld {
         void on_peer_connected(NetWorldCore &core, uint32_t peer_id) override;
         void on_peer_disconnected(NetWorldCore &core, uint32_t peer_id) override;
         void on_egress(NetWorldCore &core, float delta_time) override;
-        void set_client_input(const Vec3 &input) override;
-        uint64_t get_local_entity_id() const override { return server_player_entity_id_; }
+        /*void set_client_input(const Vec3 &input) override;
+        uint64_t get_local_entity_id() const override { return server_player_entity_id_; }*/
+        // TODO(1C): implémenter on_fixed_tick
+        void on_fixed_tick(NetWorldCore & /*core*/, float /*fixed_dt*/) override {}
     };
 } // networld
 

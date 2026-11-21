@@ -46,14 +46,13 @@ namespace networld {
     }
 
     void ServerRole::on_start(NetWorldCore &core) {
-        core.set_simulation_systems_enabled(true);
-        core.set_interpolation_systems_enabled(false);
 
         PacketDispatcher& packet_dispatcher = core.get_dispatcher();
         packet_dispatcher.register_handler<KnockMsg>([](uint32_t /*peer_id*/, const KnockMsg&) {
             // printf("NetWorldCore::start_host : peer %u ready\n", peer_id);
         });
 
+        /* TODO(1C): réécrire le handler InputMsg avec InputPayload + file anti-speedhack
         packet_dispatcher.register_handler<InputMsg>([this, &core](uint32_t peer_id, const InputMsg& input_msg) {
             auto it = peer_entities_.find(peer_id);
             if (it == peer_entities_.end()) return;
@@ -71,23 +70,8 @@ namespace networld {
             auto* rot = e.try_get_mut<Rotation3D>();
             if (!pos || !rot) return;
             simulate_player_step(pos->value, rot->value, input_msg.direction, FIXED_DT);
-            /*if (!std::isfinite(input_msg.direction.x) || !std::isfinite(input_msg.direction.z)) return;
-
-            Vec3 dir_input;
-            float norme = std::sqrt(input_msg.direction.x*input_msg.direction.x
-                                 + input_msg.direction.z*input_msg.direction.z);
-
-            dir_input.x = norme > 1 ? input_msg.direction.x/norme : input_msg.direction.x;
-            dir_input.y = 0;
-            dir_input.z = norme > 1 ? input_msg.direction.z/norme : input_msg.direction.z;
-
-            uint64_t entity_id = it->second;
-            core.set_entity_velocity(entity_id, dir_input * PLAYER_MOVE_SPEED);
-            if (norme > 0.001f) {
-                float yaw = std::atan2(dir_input.x, dir_input.z);
-                core.set_entity_rotation(entity_id, Quat::from_yaw(yaw));
-            }*/
         });
+        */
 
         // build query
         sync_query_ = core.get_ecs()
@@ -104,7 +88,8 @@ namespace networld {
            .add<Networked>();
 
         server_player_entity_id_ = server_player.id();
-        core.push_spawned_entity({server_player.id(), Vec3(0, 5, 0), true, Quat{}});
+        // TODO(1C): supprimer ServerPlayer et utiliser peer_connected(PEER_SERVER, true) en Listen-Server
+        // core.push_spawned_entity({server_player.id(), Vec3(0, 5, 0), true, Quat{}});
         sync_accumulator_ = 0.0f;
         host_input_ = {};
         host_accumulator_ = 0.0f;
@@ -144,7 +129,8 @@ namespace networld {
          */
     }
 
-    void ServerRole::on_peer_connected(NetWorldCore &core, uint32_t peer_id) {
+    void ServerRole::on_peer_connected(NetWorldCore & /*core*/, uint32_t /*peer_id*/) {
+        /* TODO(1C): envoyer WelcomeMsg + entités existantes + push_connected_peers
         // entity du joueur
         uint64_t new_entity_id = core.create_networked_entity(Vec3{0,5,0});
         peer_entities_[peer_id] = new_entity_id;
@@ -167,6 +153,7 @@ namespace networld {
                 core.get_transport()->send(other_peer_id, NetChannel::RELIABLE_EVENTS, out.data(), out.size());
             }
         }
+        */
     }
 
     void ServerRole::on_peer_disconnected(NetWorldCore &core, uint32_t peer_id) {
@@ -231,9 +218,5 @@ namespace networld {
             std::vector<uint8_t> out = encode_packet(sync_msg);
             core.get_transport()->send(PEER_BROADCAST, NetChannel::UNRELIABLE_STATE, out.data(), out.size());
         }*/
-    }
-
-    void ServerRole::set_client_input(const Vec3 &input) {
-        host_input_ = input;
     }
 } // networld

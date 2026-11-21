@@ -31,8 +31,6 @@ namespace networld {
     }
 
     void ClientRole::on_start(NetWorldCore &core) {
-        core.set_simulation_systems_enabled(false);
-        core.set_interpolation_systems_enabled(true);
         pending_inputs.clear();
         next_input_seq = 0;
         fixed_accumulator = 0.0f;
@@ -83,6 +81,7 @@ namespace networld {
             });
         });
 
+        /* TODO(1D): réécrire SpawnEntityMsg avec create_local_entity + WelcomeMsg + garde-fou UDP
         packet_dispatcher.register_handler<SpawnEntityMsg>([this, &core](uint32_t , const SpawnEntityMsg& msg) {
             if (net_to_local_entities_.contains(msg.entity_Id)) return;
 
@@ -109,6 +108,7 @@ namespace networld {
                     msg.entity_Id, local_id, msg.position.x, msg.position.y, msg.position.z);
             fflush(stdout);
         });
+        */
 
         packet_dispatcher.register_handler<DespawnEntityMsg>([this, &core](uint32_t , const DespawnEntityMsg& msg) {
             auto it = net_to_local_entities_.find(msg.entity_Id);
@@ -154,8 +154,9 @@ namespace networld {
             fixed_accumulator -= FIXED_DT;
 
             uint64_t seq = ++next_input_seq;
-            auto input_pkt = encode_packet(InputMsg{seq, input_client_});
-            core.get_transport()->send(PEER_SERVER, NetChannel::UNRELIABLE_STATE, input_pkt.data(), input_pkt.size());
+            // TODO(1D): envoyer InputMsg{seq, server_entity_id, payload} dans on_fixed_tick
+            // auto input_pkt = encode_packet(InputMsg{seq, input_client_});
+            // core.get_transport()->send(PEER_SERVER, NetChannel::UNRELIABLE_STATE, input_pkt.data(), input_pkt.size());
 
             if (local_player_entity_id_ != 0) {
                 if (pending_inputs.size() >= 128) pending_inputs.pop_front();
@@ -174,13 +175,5 @@ namespace networld {
         input_msg.direction = input_client_;
         auto input_pkt = encode_packet(input_msg);
         core.get_transport()->send(PEER_SERVER, NetChannel::UNRELIABLE_STATE, input_pkt.data(), input_pkt.size());*/
-    }
-
-    void ClientRole::set_client_input(const Vec3 &input) {
-        input_client_ = input;
-    }
-
-    uint64_t ClientRole::get_local_entity_id() const {
-        return local_player_entity_id_;
     }
 } // networld

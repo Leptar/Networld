@@ -34,8 +34,8 @@ namespace networld {
         void on_stop(NetWorldCore &core) override;
 
         void on_egress(NetWorldCore &core, float delta_time) override;
-        void set_client_input(const Vec3 &) override;
-        uint64_t get_local_entity_id() const override;
+        // TODO(1D): implémenter on_fixed_tick / set_local_input / get_local_peer_id
+        void on_fixed_tick(NetWorldCore & /*core*/, float /*fixed_dt*/) override {}
     };
 } // networld
 

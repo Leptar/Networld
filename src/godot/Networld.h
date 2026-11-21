@@ -59,7 +59,8 @@ namespace godot {
         String current_transport_name_ = "Godot UDP";
         void _on_settings_changed();
         std::unique_ptr<INetTransport> create_transport() const;
-        [[nodiscard]] uint64_t get_local_entity_id() const { return core_.get_local_entity_id(); }
+        // TODO(1E): remplacer par get_local_peer_id()
+        [[nodiscard]] uint64_t get_local_entity_id() const { return 0; }
     };
 
 } // namespace godot
