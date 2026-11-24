@@ -2,7 +2,7 @@
 
 > **Date :** `2026-11-21`  
 > **Statut :** 📐 Plan v1 (document vivant, appelé à évoluer au fil de l'implémentation)  
-> **Point de départ :** Post-session #06 ([06_2026-11-19_interpolation_rotation_et_prediction.md](file:///c:/Users/leoul/Godot/Projects/Networld/devlog/06_2026-11-19_interpolation_rotation_et_prediction.md), commit `fea16ea`)  
+> **Point de départ :** Post-session #06 ([06_2026-11-19_interpolation_rotation_et_prediction.md](./06_2026-11-19_interpolation_rotation_et_prediction.md), commit `fea16ea`)  
 > **Objectif :** Poser les frontières propres entre la librairie C++ (`Networld`), son plugin Godot (`GodotNetworld`) et le transport QUIC (`QuicNetworkGodot`) avant d'empiler physique, RPC, QUIC et Gameplay Framework.
 
 ---
@@ -79,12 +79,12 @@ flowchart TD
 
 ### 3.1 Topologies, Rôles & Ownership (`INetRole`)
 - **v0.1.0 : Serveur Dédié (DGS) et Listen-Server (Host autoritaire).**
-- Une fois le gameplay retiré de [ServerRole.cpp](file:///c:/Users/leoul/Godot/Projects/Networld/src/core/ServerRole.cpp), DGS et Listen-Server partagent **le même `ServerRole`** :
+- Une fois le gameplay retiré de [ServerRole.cpp](../src/core/ServerRole.cpp), DGS et Listen-Server partagent **le même `ServerRole`** :
   - `NetWorldCore` introduit deux concepts génériques par entité : **Authority** (qui valide l'état) et **Ownership** (`owner_peer_id`, quel pair envoie les inputs).
   - Le serveur ne spawn rien automatiquement : il notifie la couche supérieure (`peer_connected(peer_id)` / `peer_disconnected(peer_id)`), qui décide quoi spawner et à quel `peer_id` attribuer l'ownership.
   - En **Dedicated Server** : aucun pair local (`has_local_peer = false`), tourne en **Godot `--headless`**.
   - En **Listen-Server (Host)** : un `LOCAL_PEER_ID` est enregistré localement sur `ServerRole` (un seul monde Flecs, zéro duplication mémoire, zéro latence réseau pour le Host).
-- **Porte ouverte au P2P Mesh (post-v0.1.0) :** comme la topologie est encapsulée derrière [INetRole.h](file:///c:/Users/leoul/Godot/Projects/Networld/src/core/INetRole.h) et que l'autorité est portée au niveau de l'entité (plutôt que supposée exclusivement serveur), un futur `MeshPeerRole` pourra être ajouté sans refondre la réplication SoA.
+- **Porte ouverte au P2P Mesh (post-v0.1.0) :** comme la topologie est encapsulée derrière [INetRole.h](../src/core/INetRole.h) et que l'autorité est portée au niveau de l'entité (plutôt que supposée exclusivement serveur), un futur `MeshPeerRole` pourra être ajouté sans refondre la réplication SoA.
 
 ### 3.2 Place de Flecs & Contrainte du « Step Unitaire Rejouable »
 - **Où Flecs apporte de la valeur dans `NetWorldCore` :**
@@ -95,10 +95,10 @@ flowchart TD
 - **Ce qui reste hors systèmes `ecs_.progress()` (en C++ direct) :**
   - Couche I/O réseau, framing binaire, `StreamWriter`/`StreamReader`, `PacketDispatcher`.
   - **Simulation prédictible et réconciliation :** lors d'une réconciliation client, il faut rejouer `N` inputs en attente d'affilée dans une seule frame **uniquement sur l'entité locale prédite** (sans faire avancer tout le reste du monde `N` fois). La simulation prédictible doit donc passer par un **step unitaire rejouable** (interface/callback `(entity_id, input_payload, fixed_dt, physics_bridge)`), appelé `1×` par tick fixe normal et `N×` lors d'un replay.
-- **Inputs génériques :** remplacer le `Vec3 direction` figé de `InputMsg` ([NetMessage.h](file:///c:/Users/leoul/Godot/Projects/Networld/src/core/NetMessage.h#L125-L145)) par un payload d'input générique (flux d'octets ou structure définie par l'utilisateur / le Framework), toujours accompagné de son numéro de séquence `seq` pour l'acquittement (`ack_input_seq`).
+- **Inputs génériques :** remplacer le `Vec3 direction` figé de `InputMsg` ([NetMessage.h](../src/core/NetMessage.h#L125-L145)) par un payload d'input générique (flux d'octets ou structure définie par l'utilisateur / le Framework), toujours accompagné de son numéro de séquence `seq` pour l'acquittement (`ack_input_seq`).
 
 ### 3.3 Interface Physique (`INetPhysics`), `PhysicsServer3D` & Séparation de la Boucle
-- **Constat technique vérifié sur `godot-cpp`** ([physics_server3d.hpp](file:///c:/Users/leoul/Godot/Projects/Networld/godot-cpp/gen/include/godot_cpp/classes/physics_server3d.hpp#L267-L445)) :
+- **Constat technique vérifié sur `godot-cpp`** ([physics_server3d.hpp](../godot-cpp/gen/include/godot_cpp/classes/physics_server3d.hpp#L267-L445)) :
   - `PhysicsServer3D` **n'expose pas** de méthode publique `step()` / `space_step()` ni de sauvegarde/restauration d'état interne Jolt (`StateRecorder`) appelable depuis GDExtension.
   - En revanche, il expose directement les **requêtes et mouvements cinématiques sans état global** : `body_test_motion()`, `body_set_state()`/`body_get_state()`, et `PhysicsDirectSpaceState3D` (`intersect_ray`, `cast_motion`, `intersect_shape`, `get_rest_info`).
 - **Choix retenu pour la v0.1.0 — Physique Cinématique (Niveau 1) :**
@@ -106,7 +106,7 @@ flowchart TD
   - Si aucun moteur physique n'est injecté, `NetWorldCore` utilise un fallback intégré `DefaultKinematicPhysics` (intégration mathématique pure en C++ : le Core reste autonome).
   - Côté Godot, `GodotPhysicsBridge` implémente `INetPhysics` sur `PhysicsServer3D` (utilisant les `RID` et le `Space` du `World3D` Godot).
   - **Double avantage avec Godot `--headless` :** les développeurs construisent leurs niveaux normalement dans l'éditeur Godot (`StaticBody3D`, `CollisionShape3D`), et serveur headless comme clients interrogent exactement la même géométrie de collision via `PhysicsServer3D` en C++ natif (compatible Godot-Jolt comme GodotPhysics).
-- **Séparation obligatoire de la boucle dans `NetWorld`** ([Networld.cpp](file:///c:/Users/leoul/Godot/Projects/Networld/src/godot/Networld.cpp#L152)) :
+- **Séparation obligatoire de la boucle dans `NetWorld`** ([Networld.cpp](../src/godot/Networld.cpp#L152)) :
 
 ```mermaid
 sequenceDiagram
@@ -137,7 +137,7 @@ sequenceDiagram
 - **Correspondance naturelle avec QUIC :**
   - `NetChannel::RELIABLE_EVENTS` → **QUIC Streams** (spawn, despawn, RPC fiables, ordonnancement + chiffrement TLS 1.3 natif).
   - `NetChannel::UNRELIABLE_STATE` → **QUIC Datagrams (RFC 9221)** (snapshots `StateSyncMsg`, `InputMsg`, sans *head-of-line blocking*).
-- **Évolutions légères à prévoir sur [INetTransport.h](file:///c:/Users/leoul/Godot/Projects/Networld/src/core/INetTransport.h) :**
+- **Évolutions légères à prévoir sur [INetTransport.h](../src/core/INetTransport.h) :**
   - Exposer `virtual size_t get_max_unreliable_payload(uint32_t peer_id) const` pour respecter la PMTU des QUIC Datagrams (~1150–1200 octets) lors du découpage des gros `StateSyncMsg`.
   - Garder la configuration TLS/certificats/ALPN hors de `INetTransport` (dans `QuicConfig`, piloté côté Godot via `ProjectSettings`).
   - Le futur **NAT Traversal** restera 100 % encapsulé dans `QuicNetworkGodot` sans impacter `NetWorldCore`.
@@ -172,8 +172,8 @@ sequenceDiagram
 Chaque étape doit laisser le projet **compilable, testable et fonctionnel** :
 
 ### Étape 1 — Purge du Gameplay dans `NetWorldCore`, Ownership, Simulation Générique & 2 Pipelines
-- [ ] Corriger les 2 micro-bugs de la session #06 (`if (pos && rot)` dans [ClientRole.cpp](file:///c:/Users/leoul/Godot/Projects/Networld/src/core/ClientRole.cpp#L52), aligner les 4 arguments du signal `entity_spawned` dans [Networld.cpp](file:///c:/Users/leoul/Godot/Projects/Networld/src/godot/Networld.cpp#L165)).
-- [ ] Retirer `"ServerPlayer"`, l'auto-spawn et [MovementSim.h](file:///c:/Users/leoul/Godot/Projects/Networld/src/core/MovementSim.h) de `src/core/` (déplacer le mouvement de démo côté couche Godot / démo).
+- [ ] Corriger les 2 micro-bugs de la session #06 (`if (pos && rot)` dans [ClientRole.cpp](../src/core/ClientRole.cpp#L52), aligner les 4 arguments du signal `entity_spawned` dans [Networld.cpp](../src/godot/Networld.cpp#L165)).
+- [ ] Retirer `"ServerPlayer"`, l'auto-spawn et [MovementSim.h](../src/core/MovementSim.h) de `src/core/` (déplacer le mouvement de démo côté couche Godot / démo).
 - [ ] Implémenter **Contrat 1** : `PEER_NONE = 0` / `PEER_SERVER = 1` / clients `>= 2`, composant POD `NetOwnership`, `HostMode` (`Dedicated` vs `Listen`), événements `peer_connected` / `peer_disconnected` et helper `destroy_entities_owned_by(peer_id)`.
 - [ ] Implémenter **Contrat 2** : `WelcomeMsg { assigned_peer_id, server_tick }`, `SpawnParams` + `SpawnEntityMsg { entity_id, type_id, owner_peer_id, position, rotation, predicted }` et spawn/despawn piloté par l'extérieur (`spawn_networked_entity` / `despawn_networked_entity`).
 - [ ] Implémenter **Contrat 3** : `InputPayload` inline fixe (`64 octets`, 0 allocation), `InputMsg { seq, target_entity_id, payload }` vérifié par ownership, file d'inputs bornée côté serveur (anti-speedhack) et `register_entity_simulator(type_id, callback)` avec `SimContext { core, dt, input_seq, is_replay }`.
