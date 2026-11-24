@@ -122,20 +122,20 @@ flowchart TB
 
 ### Choix n°2 : `NetBatch` comme structure tampon entre Flecs et le Réseau
 - **Pourquoi ne pas sérialiser directement dans `flecs::iter` ?**
-  Dans la toute première version (conservée en commentaire en bas de [serialization.cpp](file:///c:/Users/leoul/Godot/Projects/Networld/src/core/serialization.cpp#L44-L106)), la fonction `serialize_query` prenait directement un `flecs::iter&`. Cela couplait le format de paquet binaire à l'API interne de Flecs et rendait la désérialisation asymétrique.
-- **Avec `NetBatch` ([NetBatch.h](file:///c:/Users/leoul/Godot/Projects/Networld/src/core/NetBatch.h)) :**
+  Dans la toute première version (conservée en commentaire en bas de [serialization.cpp](../src/core/serialization.cpp#L44-L106)), la fonction `serialize_query` prenait directement un `flecs::iter&`. Cela couplait le format de paquet binaire à l'API interne de Flecs et rendait la désérialisation asymétrique.
+- **Avec `NetBatch` ([NetBatch.h](../src/core/NetBatch.h)) :**
   - `serialize_batch(const NetBatch&)` et `deserialize_buffer(const uint8_t*, size_t)` sont des fonctions **pures**, sans aucune dépendance à Flecs ni à Godot.
   - On peut les tester unitairement en créant un `NetBatch` à la main et en vérifiant que `deserialize_buffer(serialize_batch(b)) == b`.
 
 ### Choix n°3 : `NetRegistry` pour stabiliser les identifiants de composants sur le réseau
 - **Problème :** Dans Flecs, chaque composant reçoit un `flecs::id_t` (64 bits) généré dynamiquement à l'exécution selon l'ordre d'enregistrement des composants. Rien ne garantit à 100 % qu'un client et un serveur (ou deux builds différents) auront le même ID interne Flecs, et envoyer 8 octets par type de composant gaspille de la bande passante.
-- **Solution ([NetRegistry.h](file:///c:/Users/leoul/Godot/Projects/Networld/src/core/NetRegistry.h)) :** Deux `std::unordered_map` font la traduction bidirectionnelle entre le `flecs::id_t` (64 bits local) et un `uint16_t net_id` (16 bits fixe sur le réseau, ex: `10` = `Position3D`, `11` = `Velocity3D`, `12` = `Networked`). De plus, tout composant dont le `net_id` vaut `0` (comme `ExternalView` ou `Gravity`) est automatiquement ignoré par la sérialisation réseau !
+- **Solution ([NetRegistry.h](../src/core/NetRegistry.h)) :** Deux `std::unordered_map` font la traduction bidirectionnelle entre le `flecs::id_t` (64 bits local) et un `uint16_t net_id` (16 bits fixe sur le réseau, ex: `10` = `Position3D`, `11` = `Velocity3D`, `12` = `Networked`). De plus, tout composant dont le `net_id` vaut `0` (comme `ExternalView` ou `Gravity`) est automatiquement ignoré par la sérialisation réseau !
 
 ### Choix n°4 : Découplage Moteur via `ExternalView` (`host_handle`) et `ViewSyncEntry`
 - **Problème :** Si un composant Flecs stockait un `godot::Node3D*`, alors :
   1. `NetWorldCore` dépendrait de `godot-cpp`.
   2. Si un `Node3D` était détruit dans Godot (`queue_free()`), le pointeur dans l'ECS deviendrait un *dangling pointer* provoquant un crash immédiat.
-- **Solution ([NetComponent.h](file:///c:/Users/leoul/Godot/Projects/Networld/src/core/NetComponent.h#L37-L46)) :**
+- **Solution ([NetComponent.h](../src/core/NetComponent.h#L37-L46)) :**
   - L'entité Flecs stocke un composant `ExternalView { uint64_t host_handle }`, où `host_handle` est l'`ObjectID` (`visual_node->get_instance_id()`) de Godot.
   - À la fin de chaque tick ECS, le système `CollectViewUpdates` remplit un vecteur `view_updates_` contenant des triplets `{ entity_id, host_handle, position }`.
   - Dans `NetWorld::_process`, la couche Godot parcourt `core_.get_view_updates()`, interroge `ObjectDB::get_instance(update.host_handle)` (ce qui est **100 % sécurisé** en Godot : renvoie `nullptr` si le nœud a été détruit) et met à jour la `global_position` du `Node3D`.
@@ -149,7 +149,7 @@ flowchart TB
 ## 5. Analyse Détaillée du Code — Couche `src/core/` (C++ Pur & Flecs)
 
 ### 5.1 `NetComponent.h` : Composants POD et découplage des vues
-Fichier : [NetComponent.h](file:///c:/Users/leoul/Godot/Projects/Networld/src/core/NetComponent.h)
+Fichier : [NetComponent.h](../src/core/NetComponent.h)
 
 Tous les éléments du cœur sont dans le namespace `networld`.
 - **`struct Vec3`** (lignes 14-26) : Vecteur 3D minimaliste (`float x, y, z`) avec surcharge des opérateurs `+`, `*` (scalaire) et `+=`. Garantit une taille exacte de `12 octets` (`3 * sizeof(float)`), Trivial / POD, copiable par `std::memcpy`.
@@ -166,7 +166,7 @@ Tous les éléments du cœur sont dans le namespace `networld`.
 ---
 
 ### 5.2 `NetRegistry.h` : Traduction bidirectionnelle des IDs de composants
-Fichier : [NetRegistry.h](file:///c:/Users/leoul/Godot/Projects/Networld/src/core/NetRegistry.h)
+Fichier : [NetRegistry.h](../src/core/NetRegistry.h)
 
 Classe de correspondance (`local_to_net_` et `net_to_local_`) :
 - `register_component(flecs::id_t local_id, uint16_t net_id)` : Lie l'ID Flecs local à un identifiant réseau sur 2 octets.
@@ -176,7 +176,7 @@ Classe de correspondance (`local_to_net_` et `net_to_local_`) :
 ---
 
 ### 5.3 `NetBatch.h` : Structure intermédiaire SoA (Structure of Arrays)
-Fichier : [NetBatch.h](file:///c:/Users/leoul/Godot/Projects/Networld/src/core/NetBatch.h)
+Fichier : [NetBatch.h](../src/core/NetBatch.h)
 
 Représente les données d'un archétype (table Flecs) prêtes à être sérialisées ou fraîchement désérialisées :
 - **`struct NetColumn`** :
@@ -190,7 +190,7 @@ Représente les données d'un archétype (table Flecs) prêtes à être sériali
 ---
 
 ### 5.4 `serialization.h/.cpp` & `deserialization.h/.cpp` : Protocole binaire
-Fichiers : [serialization.h](file:///c:/Users/leoul/Godot/Projects/Networld/src/core/serialization.h), [serialization.cpp](file:///c:/Users/leoul/Godot/Projects/Networld/src/core/serialization.cpp), [deserialization.h](file:///c:/Users/leoul/Godot/Projects/Networld/src/core/deserialization.h), [deserialization.cpp](file:///c:/Users/leoul/Godot/Projects/Networld/src/core/deserialization.cpp)
+Fichiers : [serialization.h](../src/core/serialization.h), [serialization.cpp](../src/core/serialization.cpp), [deserialization.h](../src/core/deserialization.h), [deserialization.cpp](../src/core/deserialization.cpp)
 
 #### Schéma du Format Binaire d'un `NetBatch` sur le réseau
 Un paquet UDP peut contenir **un ou plusieurs `NetBatch` concaténés** (un par archétype Flecs correspondant à la requête). Voici la structure exacte au niveau de l'octet :
@@ -215,7 +215,7 @@ flowchart LR
     end
 ```
 
-#### Fonctionnement de `serialize_batch(const NetBatch& batch)` ([serialization.cpp](file:///c:/Users/leoul/Godot/Projects/Networld/src/core/serialization.cpp#L8-L42)) :
+#### Fonctionnement de `serialize_batch(const NetBatch& batch)` ([serialization.cpp](../src/core/serialization.cpp#L8-L42)) :
 1. Vérifie si `batch.entities` est vide (si oui, retourne un buffer vide).
 2. Écrit `entity_count` (`uint16_t`) en **Big-Endian** (`(entity_count >> 8) & 0xFF`, puis `entity_count & 0xFF`).
 3. Redimensionne le buffer et copie d'un bloc les `N` identifiants d'entités (`N * sizeof(uint64_t)`) via `std::memcpy`.
@@ -225,7 +225,7 @@ flowchart LR
    - Écrit `col.element_size` sur 2 octets Big-Endian.
    - Copie tout `col.payload` en un seul `std::memcpy`.
 
-#### Fonctionnement de `deserialize_buffer(const uint8_t* data, size_t size)` ([deserialization.cpp](file:///c:/Users/leoul/Godot/Projects/Networld/src/core/deserialization.cpp#L7-L52)) :
+#### Fonctionnement de `deserialize_buffer(const uint8_t* data, size_t size)` ([deserialization.cpp](../src/core/deserialization.cpp#L7-L52)) :
 1. Lit le buffer en boucle (`while (offset + 3 <= size)`) pour décoder tous les blocs `NetBatch` présents dans le paquet UDP.
 2. À chaque étape, effectue des **vérifications de dépassement de tampon (bounds checking)** :
    - `if (offset + entities_bytes + 1 > size) break;`
@@ -237,7 +237,7 @@ flowchart LR
 ---
 
 ### 5.5 `INetTransport.h` : Abstraction de la couche réseau
-Fichier : [INetTransport.h](file:///c:/Users/leoul/Godot/Projects/Networld/src/core/INetTransport.h)
+Fichier : [INetTransport.h](../src/core/INetTransport.h)
 
 Définit le contrat minimal que n'importe quelle bibliothèque réseau doit respecter :
 - `enum class NetChannel : uint8_t` :
@@ -253,11 +253,11 @@ Définit le contrat minimal que n'importe quelle bibliothèque réseau doit resp
 ---
 
 ### 5.6 `NetworldCore.h/.cpp` : Le cœur ECS et la boucle `step()`
-Fichiers : [NetworldCore.h](file:///c:/Users/leoul/Godot/Projects/Networld/src/core/NetworldCore.h), [NetworldCore.cpp](file:///c:/Users/leoul/Godot/Projects/Networld/src/core/NetworldCore.cpp)
+Fichiers : [NetworldCore.h](../src/core/NetworldCore.h), [NetworldCore.cpp](../src/core/NetworldCore.cpp)
 
 C'est le chef d'orchestre de la bibliothèque.
 
-#### Initialisation dans le constructeur `NetWorldCore::NetWorldCore()` ([NetworldCore.cpp](file:///c:/Users/leoul/Godot/Projects/Networld/src/core/NetworldCore.cpp#L66-L101)) :
+#### Initialisation dans le constructeur `NetWorldCore::NetWorldCore()` ([NetworldCore.cpp](../src/core/NetworldCore.cpp#L66-L101)) :
 1. **Enregistrement réseau des composants :**
    - `Position3D` $\rightarrow$ NetID `10`
    - `Velocity3D` $\rightarrow$ NetID `11`
@@ -270,12 +270,12 @@ C'est le chef d'orchestre de la bibliothèque.
    - `ApplyMovement` (`<Position3D, const Velocity3D>`) : `p.value += v.value * it.delta_time();`
    - `CollectViewUpdates` (`<const Position3D, const ExternalView>`) : Si `v.host_handle != 0`, pousse `{e.id(), v.host_handle, p.value}` dans `view_updates_`.
 
-#### Connexion Initiale (`start_host` et `start_client`) ([NetworldCore.cpp](file:///c:/Users/leoul/Godot/Projects/Networld/src/core/NetworldCore.cpp#L111-L137)) :
+#### Connexion Initiale (`start_host` et `start_client`) ([NetworldCore.cpp](../src/core/NetworldCore.cpp#L111-L137)) :
 - **Sur le Host (`start_host`) :** Ouvre le transport en mode Host, et crée l'entité de test `"ServerPlayer"` à la position `(0, 5, 0)` avec une vélocité `(1, 0, 0)` et le tag `Networked`. (Note : comme `"ServerPlayer"` est la toute première entité créée après les composants aussi bien sur le Host que sur le Client, elle obtient le même ID d'entité Flecs des deux côtés).
 - **Sur le Client (`start_client`) :** Ouvre le transport vers `host_ip:port`, crée l'entité `"ServerPlayer"` à `(0, 0, 0)` et envoie un **Knock Packet** (`0xFF`, 1 octet) au Host.
   - *Pourquoi ce Knock Packet ?* Comme UDP est sans connexion (*connectionless*), le Host ne connaît pas l'IP et le port éphémère du Client tant que le Client ne lui a pas envoyé au moins un datagramme ! Ce paquet de 1 octet (trop court pour être un `NetBatch` valide, donc ignoré sans erreur par `deserialize_buffer` qui exige `size >= 3`) permet à `GodotUdpTransport::poll()` côté Host de capturer l'IP et le port du Client pour lui envoyer les snapshots suivants.
 
-#### La boucle `NetWorldCore::step(float delta_time)` ([NetworldCore.cpp](file:///c:/Users/leoul/Godot/Projects/Networld/src/core/NetworldCore.cpp#L143-L176)) :
+#### La boucle `NetWorldCore::step(float delta_time)` ([NetworldCore.cpp](../src/core/NetworldCore.cpp#L143-L176)) :
 C'est le pipeline fondamental exécuté à chaque frame :
 
 ```mermaid
@@ -323,7 +323,7 @@ sequenceDiagram
     Note over Godot: Met à jour Node3D->set_global_position()
 ```
 
-#### Détail d'`extract_batch` et `apply_batches` ([NetworldCore.cpp](file:///c:/Users/leoul/Godot/Projects/Networld/src/core/NetworldCore.cpp#L13-L64)) :
+#### Détail d'`extract_batch` et `apply_batches` ([NetworldCore.cpp](../src/core/NetworldCore.cpp#L13-L64)) :
 - **`extract_batch(const flecs::iter& it)`** :
   - Accède à l'itérateur C bas niveau `const flecs::iter_t* c_it = it.c_ptr();`.
   - Copie tous les IDs d'entités de la table (`c_it->entities`) dans `batch.entities`.
@@ -338,7 +338,7 @@ sequenceDiagram
 ## 6. Analyse Détaillée du Code — Couche `src/godot/` (Pont GDExtension)
 
 ### 6.1 `register_types.h/.cpp` : Point d'entrée GDExtension & Singleton
-Fichiers : [register_types.h](file:///c:/Users/leoul/Godot/Projects/Networld/src/godot/register_types.h), [register_types.cpp](file:///c:/Users/leoul/Godot/Projects/Networld/src/godot/register_types.cpp)
+Fichiers : [register_types.h](../src/godot/register_types.h), [register_types.cpp](../src/godot/register_types.cpp)
 
 - Expose la fonction C `Networld(...)` (correspondant à `entry_symbol = "Networld"` dans `gdexample.gdextension`).
 - Au niveau `MODULE_INITIALIZATION_LEVEL_SCENE` :
@@ -350,7 +350,7 @@ Fichiers : [register_types.h](file:///c:/Users/leoul/Godot/Projects/Networld/src
 ---
 
 ### 6.2 `GodotUDPTransport.h/.cpp` : Implémentation UDP via `PacketPeerUDP`
-Fichiers : [GodotUDPTransport.h](file:///c:/Users/leoul/Godot/Projects/Networld/src/godot/GodotUDPTransport.h), [GodotUDPTransport.cpp](file:///c:/Users/leoul/Godot/Projects/Networld/src/godot/GodotUDPTransport.cpp)
+Fichiers : [GodotUDPTransport.h](../src/godot/GodotUDPTransport.h), [GodotUDPTransport.cpp](../src/godot/GodotUDPTransport.cpp)
 
 Implémente `INetTransport` en encapsulant un `godot::Ref<PacketPeerUDP>` :
 - **`open_as_host(port)`** : Appelle `udp->bind(port)` et passe `is_host = true`.
@@ -365,7 +365,7 @@ Implémente `INetTransport` en encapsulant un `godot::Ref<PacketPeerUDP>` :
 ---
 
 ### 6.3 `Networld.h/.cpp` : Singleton Godot, ProjectSettings et synchronisation Node3D
-Fichiers : [Networld.h](file:///c:/Users/leoul/Godot/Projects/Networld/src/godot/Networld.h), [Networld.cpp](file:///c:/Users/leoul/Godot/Projects/Networld/src/godot/Networld.cpp)
+Fichiers : [Networld.h](../src/godot/Networld.h), [Networld.cpp](../src/godot/Networld.cpp)
 
 Hérite de `godot::Node` (`GDCLASS(NetWorld, Node)`).
 - **Intégration aux ProjectSettings (Constructeur & `_on_settings_changed`)** :
@@ -384,14 +384,14 @@ Hérite de `godot::Node` (`GDCLASS(NetWorld, Node)`).
 
 ## 7. Build System (`SConstruct`) et Démo (`demo/`)
 
-### `SConstruct` ([SConstruct](file:///c:/Users/leoul/Godot/Projects/Networld/SConstruct))
+### `SConstruct` ([SConstruct](../SConstruct))
 - S'appuie sur l'environnement SCons de `godot-cpp/SConstruct`.
 - Utilise `VariantDir` pour compiler proprement les fichiers `.obj` dans `build/src` et `build/thirdparty` sans polluer les dossiers sources.
 - Compile tous les `.cpp` de `src/`, `src/core/`, `src/godot/` ainsi que `thirdparty/flecs/flecs.c`.
 - Ajoute la bibliothèque système `ws2_32` (Winsock2) sur Windows, requise par Flecs (notamment pour l'API REST / sockets).
 - Produit la DLL dans `demo/bin/Networld.windows.template_debug.x86_64.dll` (et release).
 
-### Scène de démo ([demo/test_networld.gd](file:///c:/Users/leoul/Godot/Projects/Networld/demo/test_networld.gd) & [demo/test_networld.tscn](file:///c:/Users/leoul/Godot/Projects/Networld/demo/test_networld.tscn))
+### Scène de démo ([demo/test_networld.gd](../demo/test_networld.gd) & [demo/test_networld.tscn](../demo/test_networld.tscn))
 - Crée par code un cube (`MeshInstance3D` + `BoxMesh`), une `Camera3D` et deux boutons UI (`Démarrer en tant que HOST` et `Démarrer en tant que CLIENT`).
 - Au clic sur Host ou Client :
   1. Ajoute le singleton `Networld` comme enfant de la scène (`add_child(Networld)`) afin que sa méthode `_process(delta)` soit appelée à chaque frame par l'arbre de scène Godot.
@@ -407,17 +407,17 @@ En inspectant l'état exact du dépôt au dernier commit (`876342fb` - *"REMOVE 
 
 > [!WARNING]
 > **1. Reliquat de `NetEntity` dans `register_types.cpp`**  
-> Les fichiers `NetEntity.h` et `NetEntity.cpp` ont été supprimés lors du dernier commit, mais [register_types.cpp](file:///c:/Users/leoul/Godot/Projects/Networld/src/godot/register_types.cpp#L8) contient encore `#include "NetEntity.h"` (ligne 8) et `ClassDB::register_class<NetEntity>();` (ligne 29). Il faudra supprimer ces deux lignes pour que la prochaine compilation SCons réussisse.
+> Les fichiers `NetEntity.h` et `NetEntity.cpp` ont été supprimés lors du dernier commit, mais [register_types.cpp](../src/godot/register_types.cpp#L8) contient encore `#include "NetEntity.h"` (ligne 8) et `ClassDB::register_class<NetEntity>();` (ligne 29). Il faudra supprimer ces deux lignes pour que la prochaine compilation SCons réussisse.
 
 > [!IMPORTANT]
 > **2. Ordre d'enregistrement du transport dans `register_types.cpp`**  
-> Dans [register_types.cpp](file:///c:/Users/leoul/Godot/Projects/Networld/src/godot/register_types.cpp#L22-L27), `networld_instance = memnew(NetWorld);` (ligne 22) est appelé **avant** `NetWorld::register_transport("Godot UDP", ...)` (ligne 25).  
+> Dans [register_types.cpp](../src/godot/register_types.cpp#L22-L27), `networld_instance = memnew(NetWorld);` (ligne 22) est appelé **avant** `NetWorld::register_transport("Godot UDP", ...)` (ligne 25).  
 > Or, le constructeur `NetWorld::NetWorld()` parcourt `transport_registry_` pour générer le menu déroulant des `ProjectSettings` et appelle `create_transport()`. Comme `"Godot UDP"` est enregistré juste après le `memnew`, `transport_registry_` est vide au moment où le constructeur s'exécute (ce qui déclenche le message d'erreur de fallback `"Transport introuvable"`).  
 > **Correction simple :** Appeler `NetWorld::register_transport("Godot UDP", ...)` **avant** `networld_instance = memnew(NetWorld);`.
 
 > [!NOTE]
 > **3. `host()` et `join()` dans `Networld.cpp` écrasent le transport avec `GodotUdpTransport` en dur**  
-> Dans [Networld.cpp](file:///c:/Users/leoul/Godot/Projects/Networld/src/godot/Networld.cpp#L117-L125), `host()` et `join()` font encore `core_.set_transport(std::make_unique<GodotUdpTransport>());` au lieu d'utiliser `create_transport()` (ou le transport déjà configuré par les `ProjectSettings`).
+> Dans [Networld.cpp](../src/godot/Networld.cpp#L117-L125), `host()` et `join()` font encore `core_.set_transport(std::make_unique<GodotUdpTransport>());` au lieu d'utiliser `create_transport()` (ou le transport déjà configuré par les `ProjectSettings`).
 
 > [!TIP]
 > **4. Prochaines grandes étapes logiques d'architecture**  
