@@ -72,7 +72,7 @@ namespace networld {
                 }
             });
 
-        ecs_.system<const Position3D, const Rotation3D, const ExternalView>("CollectPredictedViewUpdates")
+        ecs_.system<const Position3D, const Rotation3D, const ExternalView>("CollectDirectViews")
             .without<InterpolationState>()
             .kind(flecs::PostUpdate)
             .each([this](flecs::entity e, const Position3D& p, const Rotation3D& r, const ExternalView& v) {
@@ -96,7 +96,7 @@ namespace networld {
         packet_dispatcher_ = PacketDispatcher{};
         current_tick_ = 0;
         if (!transport_->open_as_host(port)) return false;
-        role_ = std::make_unique<ServerRole>();
+        role_ = std::make_unique<ServerRole>(mode);
         role_->on_start(*this);
         return true;
     }
