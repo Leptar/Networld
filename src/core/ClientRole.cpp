@@ -4,7 +4,6 @@
 
 #include "ClientRole.h"
 #include <ranges>
-#include "MovementSim.h"
 #include "NetMessage.h"
 #include "NetworldCore.h"
 
@@ -30,28 +29,97 @@ namespace networld {
         }
     }
 
+    void ClientRole::handle_spawn_entity(NetWorldCore &core, const SpawnEntityMsg &msg) {
+        SpawnParams spawn_params;
+        spawn_params.type_id = msg.type_id;
+        spawn_params.owner_peer_id = msg.owner_peer_id;
+        spawn_params.position = msg.position;
+        spawn_params.rotation = msg.rotation;
+        spawn_params.predicted = msg.predicted;
+
+        uint64_t local_id = core.create_local_entity(spawn_params);
+        net_to_local_entities_[msg.entity_Id] = local_id;
+        local_to_net_entities_[local_id] = msg.entity_Id;
+
+        flecs::entity e = core.get_ecs().entity(local_id);
+        e.set<NetEntityID>({msg.entity_Id});
+
+        const bool is_local = (local_peer_id_ != PEER_NONE && msg.owner_peer_id == local_peer_id_);
+        if (is_local && msg.predicted) {
+            e.add<LocalPredicted>();
+        } else {
+            e.set<InterpolationState>({
+            spawn_params.position, spawn_params.position, spawn_params.position,
+            spawn_params.rotation, spawn_params.rotation, spawn_params.rotation,
+            0.0f, NET_SYNC_INTERVAL
+            });
+        }
+
+        core.push_spawned_entity(EntitySpawnEntry{
+            spawn_params.type_id, spawn_params.owner_peer_id, local_id,
+            spawn_params.position, is_local, spawn_params.rotation
+        });
+    }
+
     void ClientRole::on_start(NetWorldCore &core) {
-        pending_inputs.clear();
+        pending_inputs_.clear();
+        staged_local_inputs_.clear();
+        deferred_spawns_.clear();
+        welcome_received_ = false;
+        local_peer_id_ = PEER_NONE;
         next_input_seq = 0;
-        fixed_accumulator = 0.0f;
+        last_received_tick_ = 0;
 
         PacketDispatcher& packet_dispatcher = core.get_dispatcher();
+
+        packet_dispatcher.register_handler<WelcomeMsg>([this, &core](uint32_t , const WelcomeMsg& msg) {
+            if (welcome_received_) return;
+
+            local_peer_id_ = msg.assigned_peer_id;
+            welcome_received_ = true;
+            core.push_connected_peers(PeerEvent{local_peer_id_, true});
+
+            for (const SpawnEntityMsg& pending_spawn : deferred_spawns_) {
+                handle_spawn_entity(core, pending_spawn);
+            }
+            deferred_spawns_.clear();
+        });
+
+        packet_dispatcher.register_handler<SpawnEntityMsg>([this, &core](uint32_t, const SpawnEntityMsg& msg) {
+            if (!welcome_received_) {
+                deferred_spawns_.push_back(msg);
+                return;
+            }
+            handle_spawn_entity(core, msg);
+        });
+
+        packet_dispatcher.register_handler<DespawnEntityMsg>([this, &core](uint32_t, const DespawnEntityMsg& msg) {
+            auto it = net_to_local_entities_.find(msg.entity_Id);
+            if (it == net_to_local_entities_.end()) return;
+
+            uint64_t& to_despawn_id = it->second;
+            core.push_despawned_entity(to_despawn_id);
+            staged_local_inputs_.erase(to_despawn_id);
+            std::erase_if(pending_inputs_, [to_despawn_id](const PendingInput& input) {
+               return input.local_entity_id == to_despawn_id;
+            });
+            local_to_net_entities_.erase(to_despawn_id);
+            net_to_local_entities_.erase(it);
+            core.destroy_entity(to_despawn_id);
+        });
 
         packet_dispatcher.register_handler<StateSyncMsg>([this, &core](uint32_t /*peer_id*/, const StateSyncMsg& msg) {
             if (msg.tick <= last_received_tick_) return;
             last_received_tick_ = msg.tick;
             apply_batches(core, msg.batches);
 
-            while (!pending_inputs.empty() && pending_inputs.front().seq <= msg.ack_input_seq) pending_inputs.pop_front();
+            while (!pending_inputs_.empty() && pending_inputs_.front().seq <= msg.ack_input_seq) pending_inputs_.pop_front();
 
-            if (local_player_entity_id_ != 0) {
-                auto pos = core.get_ecs().entity(local_player_entity_id_).try_get_mut<Position3D>();
-                auto rot = core.get_ecs().entity(local_player_entity_id_).try_get_mut<Rotation3D>();
-                if (pos || rot) {
-                    for (auto pendingInput: pending_inputs) {
-                        simulate_player_step(pos->value, rot->value, pendingInput.direction, FIXED_DT);
-                    }
-                }
+            for (const PendingInput& input : pending_inputs_) {
+                flecs::entity e = core.get_ecs().entity(input.local_entity_id);
+                if (!e.is_alive() || !e.has<LocalPredicted>()) continue;
+                SimContext ctx{core, FIXED_DT, input.seq, true};
+                core.run_entity_simulator(input.local_entity_id, input.payload, ctx);
             }
 
             if (msg.tick % 60 == 0 || last_received_tick_ == 0) {
@@ -81,49 +149,6 @@ namespace networld {
             });
         });
 
-        /* TODO(1D): réécrire SpawnEntityMsg avec create_local_entity + WelcomeMsg + garde-fou UDP
-        packet_dispatcher.register_handler<SpawnEntityMsg>([this, &core](uint32_t , const SpawnEntityMsg& msg) {
-            if (net_to_local_entities_.contains(msg.entity_Id)) return;
-
-            uint64_t local_id = core.create_networked_entity(msg.position);
-            net_to_local_entities_[msg.entity_Id] = local_id;
-
-
-            core.set_entity_rotation(local_id, msg.rotation);
-            if (msg.is_owner) {
-                local_player_entity_id_ = local_id;
-                core.get_ecs().entity(local_id).add<LocalPredicted>();
-            } else {
-                core.get_ecs().entity(local_id).set<InterpolationState>({
-                msg.position, msg.position, msg.position,
-                msg.rotation, msg.rotation, msg.rotation,
-                0.f,
-                NET_SYNC_INTERVAL
-                });
-            }
-            core.push_spawned_entity({local_id, msg.position, msg.is_owner, msg.rotation});
-
-
-            printf("[CLIENT] SpawnEntityMsg server_id=%llu -> local_id=%llu (%.2f, %.2f, %.2f)\n",
-                    msg.entity_Id, local_id, msg.position.x, msg.position.y, msg.position.z);
-            fflush(stdout);
-        });
-        */
-
-        packet_dispatcher.register_handler<DespawnEntityMsg>([this, &core](uint32_t , const DespawnEntityMsg& msg) {
-            auto it = net_to_local_entities_.find(msg.entity_Id);
-            if (it == net_to_local_entities_.end()) return;
-
-            core.push_despawned_entity(it->second);
-
-            if (it->second == local_player_entity_id_) {
-                local_player_entity_id_ = 0;
-                pending_inputs.clear();
-            }
-            core.destroy_entity(it->second);
-            net_to_local_entities_.erase(it);
-        });
-
         auto knock = encode_packet(KnockMsg{});
         core.get_transport()->send(PEER_SERVER, NetChannel::RELIABLE_EVENTS, knock.data(), knock.size());
     }
@@ -134,46 +159,57 @@ namespace networld {
             core.destroy_entity(local_id);
         }
 
-        pending_inputs.clear();
-        next_input_seq = 0;
-        fixed_accumulator = 0.0f;
+        pending_inputs_.clear();
+        staged_local_inputs_.clear();
         net_to_local_entities_.clear();
-        local_player_entity_id_ = 0;
+        local_to_net_entities_.clear();
+        deferred_spawns_.clear();
+        local_peer_id_ = PEER_NONE;
+        welcome_received_ = false;
         last_received_tick_ = 0;
-        input_client_ = Vec3{};
+        next_input_seq = 0;
+    }
+
+    void ClientRole::set_local_input(uint64_t target_local_entity_id, const InputPayload &payload) {
+        if (target_local_entity_id == 0) return;
+        staged_local_inputs_[target_local_entity_id] = payload;
     }
 
     void ClientRole::on_egress(NetWorldCore &core, float delta_time) {
-        if (core.get_current_tick() % 60 == 0){
+        const uint8_t check_tick = !welcome_received_ ? 30 : 60;
+        if (core.get_current_tick() % check_tick == 0){
             auto knock_pkt = encode_packet(KnockMsg{});
             core.get_transport()->send(PEER_SERVER, NetChannel::UNRELIABLE_STATE, knock_pkt.data(), knock_pkt.size());
         }
+    }
 
-        fixed_accumulator += std::min(delta_time, 0.25f);
-        while (fixed_accumulator >= FIXED_DT) {
-            fixed_accumulator -= FIXED_DT;
-
-            uint64_t seq = ++next_input_seq;
-            // TODO(1D): envoyer InputMsg{seq, server_entity_id, payload} dans on_fixed_tick
-            // auto input_pkt = encode_packet(InputMsg{seq, input_client_});
-            // core.get_transport()->send(PEER_SERVER, NetChannel::UNRELIABLE_STATE, input_pkt.data(), input_pkt.size());
-
-            if (local_player_entity_id_ != 0) {
-                if (pending_inputs.size() >= 128) pending_inputs.pop_front();
-                pending_inputs.push_back({seq, input_client_});
-
-                auto pos = core.get_ecs().entity(local_player_entity_id_).try_get_mut<Position3D>();
-                auto rot = core.get_ecs().entity(local_player_entity_id_).try_get_mut<Rotation3D>();
-                if (pos && rot) {
-                    simulate_player_step(pos->value, rot->value, input_client_, FIXED_DT);
-                }
-            }
+    void ClientRole::on_fixed_tick(NetWorldCore &core, float fixed_dt) {
+        if (welcome_received_) {
+            staged_local_inputs_.clear();
+            return;
         }
 
-        /*InputMsg input_msg;
-        input_msg.tick_input = core.get_current_tick();
-        input_msg.direction = input_client_;
-        auto input_pkt = encode_packet(input_msg);
-        core.get_transport()->send(PEER_SERVER, NetChannel::UNRELIABLE_STATE, input_pkt.data(), input_pkt.size());*/
+        for (const auto& [local_id, payload] : staged_local_inputs_) {
+            auto it_net = local_to_net_entities_.find(local_id);
+            if (it_net == local_to_net_entities_.end()) continue;
+
+            flecs::entity e = core.get_ecs().entity(local_id);
+            if (!e.is_alive()) continue;
+
+            const auto* own = e.try_get<NetOwnership>();
+            if (!own || own->owner_peer_id != local_peer_id_) continue;
+
+            const uint64_t seq = ++next_input_seq;
+            auto input_pkt = encode_packet(InputMsg{seq, it_net->second, payload});
+            core.get_transport()->send(PEER_SERVER, NetChannel::UNRELIABLE_STATE, input_pkt.data(), input_pkt.size());
+
+            if (e.has<LocalPredicted>()) {
+                if (pending_inputs_.size() >= 128) pending_inputs_.pop_front();
+                pending_inputs_.push_back({seq, local_id, payload});
+
+                SimContext ctx{core, fixed_dt, seq, false};
+                core.run_entity_simulator(local_id, payload, ctx);
+            }
+        }
     }
 } // networld
