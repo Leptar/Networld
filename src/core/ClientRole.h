@@ -6,7 +6,6 @@
 #define NETWORLD_CLIENTROLE_H
 #include <unordered_map>
 #include <deque>
-#include <set>
 #include <vector>
 #include "NetMessage.h"
 #include "INetRole.h"

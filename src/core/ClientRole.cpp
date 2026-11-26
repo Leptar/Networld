@@ -30,11 +30,13 @@ namespace networld {
     }
 
     void ClientRole::handle_spawn_entity(NetWorldCore &core, const SpawnEntityMsg &msg) {
+        if (net_to_local_entities_.contains(msg.entity_Id)) return;
+
         SpawnParams spawn_params;
         spawn_params.type_id = msg.type_id;
         spawn_params.owner_peer_id = msg.owner_peer_id;
         spawn_params.position = msg.position;
-        spawn_params.rotation = msg.rotation;
+        spawn_params.rotation = msg.rotation.normalized();
         spawn_params.predicted = msg.predicted;
 
         uint64_t local_id = core.create_local_entity(spawn_params);
@@ -97,7 +99,7 @@ namespace networld {
             auto it = net_to_local_entities_.find(msg.entity_Id);
             if (it == net_to_local_entities_.end()) return;
 
-            uint64_t& to_despawn_id = it->second;
+            const uint64_t to_despawn_id = it->second;
             core.push_despawned_entity(to_despawn_id);
             staged_local_inputs_.erase(to_despawn_id);
             std::erase_if(pending_inputs_, [to_despawn_id](const PendingInput& input) {
@@ -184,7 +186,7 @@ namespace networld {
     }
 
     void ClientRole::on_fixed_tick(NetWorldCore &core, float fixed_dt) {
-        if (welcome_received_) {
+        if (!welcome_received_) {
             staged_local_inputs_.clear();
             return;
         }
@@ -211,5 +213,7 @@ namespace networld {
                 core.run_entity_simulator(local_id, payload, ctx);
             }
         }
+
+        staged_local_inputs_.clear();
     }
 } // networld
