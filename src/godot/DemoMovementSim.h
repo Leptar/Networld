@@ -1,14 +1,21 @@
 ﻿//
-// Created by leoul on 2026-11-19.
+// Created by leoul on 2026-11-25.
 //
 
-#ifndef NETWORLD_MOVEMENTSIM_H
-#define NETWORLD_MOVEMENTSIM_H
+#ifndef NETWORLD_DEMOMOVEMENTSIM_H
+#define NETWORLD_DEMOMOVEMENTSIM_H
 #include <algorithm>
 #include <cmath>
-#include "NetComponent.h"
+
+#include "../../thirdparty/flecs/flecs.h"
+#include "../core/NetComponent.h"
 
 namespace networld {
+
+    struct DemoMoveInput {
+        float dir_x = 0.0f;
+        float dir_z = 0.0f;
+    };
 
     inline constexpr float PLAYER_MOVE_SPEED = 5.0f;
     inline constexpr float PLAYER_TURN_SPEED = 12.0f;
@@ -26,6 +33,18 @@ namespace networld {
         rot = Quat::nlerp(rot, Quat::from_yaw(yaw), rot_t);
     }
 
+    inline void simulate_demo_player (flecs::entity e, const InputPayload& input, const SimContext& sim) {
+        DemoMoveInput move{};
+        if (!input.read_as(move)) return;
+
+        auto* pos = e.try_get_mut<Position3D>();
+        auto* rot = e.try_get_mut<Rotation3D>();
+        if (!pos || !rot) return;
+
+        simulate_player_step(pos->value, rot->value, Vec3{move.dir_x, 0.0f, move.dir_z}, sim.dt);
+    }
+
 } // networld
 
-#endif //NETWORLD_MOVEMENTSIM_H
+
+#endif // NETWORLD_DEMOMOVEMENTSIM_H

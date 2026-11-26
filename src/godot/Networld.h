@@ -10,7 +10,6 @@
 #include <godot_cpp/classes/node.hpp>
 #include <memory>
 #include "flecs.h"
-#include "NetRegistry.h"
 #include "NetworldCore.h"
 #include "../core/INetTransport.h"
 #include "godot_cpp/classes/node3d.hpp"
@@ -33,16 +32,22 @@ namespace godot {
         using TransportFactory = std::function<std::unique_ptr<INetTransport>()>;
         static void register_transport(const String& name, TransportFactory factory);
 
-        void host(int port);
-        void join(String ip, int port);
+        bool host_listen(int port);
+        bool host_dedicated(int port);
+        bool join(const String& ip, int port);
+        void stop_session();
+        [[nodiscard]] uint32_t get_local_peer_id() const;
 
-        uint64_t spawn_local_entity(Vector3 pos, Node3D* visual_node);
+        uint64_t spawn_entity(uint32_t type_id, uint32_t owner_peer_id, const Vector3& pos, const Quaternion& rot, bool predicted);
+        void despawn_entity(uint64_t entity_id);
+        void destroy_entities_owned_by(uint32_t peer_id);
+        void set_local_move_input(uint64_t entity_id,const Vector2& dir);
+
         void set_entity_velocity(uint64_t entity_id, const Vector3& velocity);
         void set_entity_position(uint64_t entity_id, const Vector3& pos);
-        void set_client_input(const Vector3& input);
-
         void bind_entity_view(uint64_t id, Node3D* visual_node);
 
+        void _physics_process(double p_delta) override;
         void _process(double delta) override;
     private:
         // singleton et core
@@ -59,8 +64,6 @@ namespace godot {
         String current_transport_name_ = "Godot UDP";
         void _on_settings_changed();
         std::unique_ptr<INetTransport> create_transport() const;
-        // TODO(1E): remplacer par get_local_peer_id()
-        [[nodiscard]] uint64_t get_local_entity_id() const { return 0; }
     };
 
 } // namespace godot
